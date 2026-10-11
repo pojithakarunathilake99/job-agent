@@ -5,6 +5,7 @@ export interface AIScore {
   score: number
   reason: string
   sponsorship: 'offered' | 'not offered' | 'not mentioned'
+  agency: boolean
 }
 export interface ScoreProfile { targetTitles: string; skills: string; locations: string; visaSponsorship: boolean; cvText?: string }
 
@@ -38,12 +39,13 @@ ${who}
 JOBS (short ad snippets)
 ${jobs}
 
-For EVERY job return JSON {"results":[{"i":<job number>,"score":0-100,"reason":"<max 20 words>","sponsorship":"offered"|"not offered"|"not mentioned"}]}.
+For EVERY job return JSON {"results":[{"i":<job number>,"score":0-100,"reason":"<max 20 words>","sponsorship":"offered"|"not offered"|"not mentioned","agency":true|false}]}.
+"agency" is true if the advertiser appears to be a recruitment agency rather than the employer.
 "sponsorship" reflects only what the ad text says about UK visa sponsorship.`,
     })
     for (const x of r.results ?? []) {
       const c = chunk[x.i]
-      if (c) out.set(c.key, { score: Math.max(0, Math.min(100, Math.round(x.score))), reason: x.reason ?? '', sponsorship: x.sponsorship ?? 'not mentioned' })
+      if (c) out.set(c.key, { score: Math.max(0, Math.min(100, Math.round(x.score))), reason: x.reason ?? '', sponsorship: x.sponsorship ?? 'not mentioned', agency: !!x.agency })
     }
     opts.onProgress?.(Math.min(i + size, list.length), list.length)
   }

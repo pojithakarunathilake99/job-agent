@@ -13,6 +13,9 @@ export interface Job {
   salary?: string
   description?: string
   notes?: string
+  postedAt?: string
+  match?: { score: number; reason: string; sponsorship: 'offered' | 'not offered' | 'not mentioned' }
+  sponsor?: { level: 'exact' | 'possible' | 'agency' | 'none'; name?: string }
   status: JobStatus
   history: { status: JobStatus; at: string; by: 'manual' | 'gmail' }[]
   savedAt: string
@@ -20,7 +23,7 @@ export interface Job {
 }
 
 export type NewJob = Pick<Job, 'source' | 'url' | 'title' | 'company'> &
-  Partial<Pick<Job, 'location' | 'salary' | 'description' | 'notes'>>
+  Partial<Pick<Job, 'location' | 'salary' | 'description' | 'notes' | 'postedAt' | 'match' | 'sponsor'>>
 
 interface AgentDB extends DBSchema {
   jobs: { key: string; value: Job; indexes: { url: string; status: JobStatus; savedAt: string } }

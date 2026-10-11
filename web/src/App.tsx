@@ -3,6 +3,7 @@ import './App.css'
 import { addJob, deleteJob, exportAll, getSetting, importAll, listJobs, setSetting, setStatus, updateJob, type Backup, type Job, type JobSource, type JobStatus, type NewJob } from './lib/db'
 import { generateJSON, getLLMConfig } from './lib/llm'
 import { extractCvText, extractProfile } from './lib/cv'
+import DiscoverPage from './DiscoverPage'
 
 type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job'; id?: string }
 type Profile = {
@@ -122,7 +123,6 @@ function App() {
   const [settingsMessage, setSettingsMessage] = useState('')
   const [geminiResult, setGeminiResult] = useState('')
   const [importSummary, setImportSummary] = useState('')
-  const [discoverQuery, setDiscoverQuery] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [fillingFromCv, setFillingFromCv] = useState(false)
   const cvInput = useRef<HTMLInputElement>(null)
@@ -527,25 +527,6 @@ function App() {
     </>
   }
 
-  function Discover() {
-    return <>
-      <div className="page-heading"><div><div className="eyebrow">A wider field</div><h1>Discover</h1><p className="subtitle">Find roles worth bringing into your workspace.</p></div></div>
-      <section className="toolbar">
-        <div className="search-wrap"><Icon name="search" size={16} /><input placeholder="Search job titles, companies, or keywords…" value={discoverQuery} onChange={event => setDiscoverQuery(event.target.value)} aria-label="Discover jobs search" onKeyDown={event => { if (event.key === 'Enter') notify('Live job search is not connected in this private workspace.') }} /></div>
-        <button className="button primary" onClick={() => notify('Live job search is not connected in this private workspace.')}>Search jobs</button>
-      </section>
-      <section className="panel discover-results">
-        <div className="panel-head"><h2>Results</h2><span className="panel-caption">Source not connected</span></div>
-        <div className="discover-empty" role="status" aria-live="polite">
-          <div className="discover-orbit"><Icon name="search" size={22} /></div>
-          <h2>{discoverQuery ? `Ready to look for “${discoverQuery}”` : 'Search when you’re ready'}</h2>
-          <p>Discover is a search placeholder for now. No job boards are contacted and no results are invented. Add opportunities you find elsewhere with <button className="text-link" onClick={() => setModal('add')}>Add job</button>.</p>
-        </div>
-      </section>
-      {Footer()}
-    </>
-  }
-
   function ProfilePage() {
     return <>
       <div className="page-heading"><div><div className="eyebrow">Your point of view</div><h1>Profile</h1><p className="subtitle">A private profile that helps you compare roles and keep your story close.</p></div><button className="button primary" onClick={() => { const form = document.getElementById('profile-form') as HTMLFormElement | null; form?.requestSubmit() }}><Icon name="check" size={15} />{savingProfile ? 'Saving…' : 'Save profile'}</button></div>
@@ -643,7 +624,7 @@ function App() {
       <main className="main-content">
         {route.page === 'dashboard' && Dashboard()}
         {route.page === 'job' && Detail()}
-        {route.page === 'discover' && Discover()}
+        {route.page === 'discover' && <DiscoverPage profile={profile} notify={message => notify(message)} />}
         {route.page === 'profile' && ProfilePage()}
         {route.page === 'settings' && SettingsPage()}
       </main>
