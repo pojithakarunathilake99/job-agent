@@ -1,64 +1,63 @@
 import { getSetting } from './db'
 
-export interface LLMConfig {
-  scoringModel: string
-  writingModel: string
-}
+export type Provider = 'gemini'
+export type Task = 'scoring' | 'writing'
 
-const DEFAULT_CONFIG: LLMConfig = {
+export interface LLMConfig { provider: Provider; scoringModel: string; writingModel: string }
+export const DEFAULT_LLM: LLMConfig = {
+  provider: 'gemini',
   scoringModel: 'gemini-3.5-flash-lite',
   writingModel: 'gemini-3.8-flash',
 }
 
+// Settings: "llm" = LLMConfig overrides; API key in "secret:<provider>" (never exported)
 export async function getLLMConfig(): Promise<LLMConfig> {
-  const saved = await getSetting<Partial<LLMConfig>>('llmConfig')
-  return {
-    scoringModel: saved?.scoringModel || DEFAULT_CONFIG.scoringModel,
-    writingModel: saved?.writingModel || DEFAULT_CONFIG.writingModel,
-  }
+  return { ...DEFAULT_LLM, ...(await getSetting<Partial<LLMConfig>>('llm')) }
 }
 
-export async function generateJSON<T>(
-  prompt: string,
-  options: { model?: string } = {},
-): Promise<T> {
-  const apiKey = await getSetting<string>('secret:gemini')
-  if (!apiKey?.trim()) {
-    throw new Error('Add your Gemini API key in Settings before testing Gemini.')
-  }
+interface GenOpts { task: Task; prompt: string; system?: string; json?: boolean; signal?: AbortSignal }
+type Adapter = (o: GenOpts & { model: string; key: string }) => Promise<string>
 
-  const config = await getLLMConfig()
-  const model = options.model || config.scoringModel
-  let response: Response
-  try {
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      },
-    )
-  } catch {
-    throw new Error('Gemini could not be reached. Check your connection and try again.')
-  }
+const gemini: Adapter = async ({ model, key, prompt, system, json, signal }) => {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: json ? { responseMimeType: 'application/json' } : {},
+      }),
+    },
+  )
+  const data = await res.json()
+  if (!res.ok) throw new Error(`Gemini ${res.status} (${model}): ${data?.error?.message ?? 'request failed'}`)
+  const text = (data?.candidates?.[0]?.content?.parts ?? [])
+    .map((p: { text?: string }) => p.text ?? '')
+    .join('')
+  if (!text) throw new Error('Empty response: ' + (data?.candidates?.[0]?.finishReason ?? 'unknown'))
+  return text
+}
 
-  if (!response.ok) {
-    throw new Error(`Gemini returned an error (${response.status}). Check your key and model name.`)
-  }
+const adapters: Record<Provider, Adapter> = { gemini }
 
-  const result = (await response.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[]
-  }
-  const text = result.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim()
-  if (!text) throw new Error('Gemini returned an empty response.')
+export async function generate(o: GenOpts): Promise<string> {
+  const cfg = await getLLMConfig()
+  const key = await getSetting<string>(`secret:${cfg.provider}`)
+  if (!key) throw new Error(`No API key set for ${cfg.provider}`)
+  const model = o.task === 'scoring' ? cfg.scoringModel : cfg.writingModel
+  return adapters[cfg.provider]({ ...o, model, key })
+}
 
+export async function generateJSON<T>(o: Omit<GenOpts, 'json'>): Promise<T> {
+  const text = await generate({ ...o, json: true })
   try {
     return JSON.parse(text) as T
   } catch {
-    throw new Error('Gemini returned a response that was not valid JSON.')
+    const m = text.match(/\{[\s\S]*\}/)
+    if (m) return JSON.parse(m[0]) as T
+    throw new Error('Model did not return valid JSON')
   }
 }

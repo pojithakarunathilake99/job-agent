@@ -320,7 +320,7 @@ function App() {
         setSetting('secret:gemini', secrets.gemini),
         setSetting('secret:reed', secrets.reed),
         setSetting('secret:adzuna', secrets.adzuna),
-        setSetting('llmConfig', models),
+        setSetting('llm', models),
       ])
       setSettingsMessage('Settings saved locally. API keys are excluded from backups.')
       notify('Settings saved.')
@@ -335,13 +335,9 @@ function App() {
     try {
       await Promise.all([
         setSetting('secret:gemini', secrets.gemini),
-        setSetting('llmConfig', models),
+        setSetting('llm', models),
       ])
-      const config = await getLLMConfig()
-      const result = await generateJSON<{ ok: boolean; message: string }>(
-        'Return a JSON object with keys ok (boolean) and message (string). Set ok to true and message to "Connection succeeded".',
-        { model: config.scoringModel },
-      )
+      const result = await generateJSON<{ ok: boolean; message: string }>({ task: 'scoring', prompt: 'Return a JSON object with keys ok (boolean) and message (string). Set ok to true and message to "Connection succeeded".' })
       setGeminiResult(result.message || JSON.stringify(result))
     } catch (error) {
       setGeminiResult(error instanceof Error ? error.message : 'Gemini test failed. Check your key and model.')
