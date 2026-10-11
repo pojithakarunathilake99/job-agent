@@ -21,3 +21,7 @@ if (import.meta.env.DEV) {
 if (import.meta.env.DEV) {
   import('./lib/discover').then(m => { (window as unknown as { discover: typeof m }).discover = m })
 }
+
+if (import.meta.env.DEV) {
+  import('./lib/score').then(m => { (window as unknown as { score: typeof m }).score = m })
+}
