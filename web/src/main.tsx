@@ -13,3 +13,7 @@ if (import.meta.env.DEV) {
   import('./lib/db').then(m => { (window as unknown as { jobdb: typeof m }).jobdb = m })
   import('./lib/llm').then(m => { (window as unknown as { llm: typeof m }).llm = m })
 }
+
+if (import.meta.env.DEV) {
+  import('./lib/sponsors').then(m => { (window as unknown as { sponsors: typeof m }).sponsors = m })
+}
