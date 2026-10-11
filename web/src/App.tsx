@@ -116,7 +116,7 @@ function App() {
   const [notesEditor, setNotesEditor] = useState({ jobId: '', value: '' })
   const [savingNotes, setSavingNotes] = useState(false)
   const [secrets, setSecrets] = useState({ gemini: '', reed: '', adzuna: '' })
-  const [models, setModels] = useState({ scoringModel: 'gemini-2.5-flash', writingModel: 'gemini-2.5-flash' })
+  const [models, setModels] = useState({ scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' })
   const [settingsBusy, setSettingsBusy] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
   const [geminiResult, setGeminiResult] = useState('')

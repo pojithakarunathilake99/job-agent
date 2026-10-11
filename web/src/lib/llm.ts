@@ -6,8 +6,8 @@ export interface LLMConfig {
 }
 
 const DEFAULT_CONFIG: LLMConfig = {
-  scoringModel: 'gemini-2.5-flash',
-  writingModel: 'gemini-2.5-pro',
+  scoringModel: 'gemini-3.5-flash-lite',
+  writingModel: 'gemini-3.8-flash',
 }
 
 export async function getLLMConfig(): Promise<LLMConfig> {
