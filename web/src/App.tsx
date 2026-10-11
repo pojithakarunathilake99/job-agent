@@ -71,6 +71,9 @@ function initials(value: string) {
 }
 
 function sponsorSignal(job: Job): 'sponsor' | 'possible' | null {
+  if (job.match?.sponsorship === 'not offered') return null
+  if (job.sponsor?.level === 'exact') return 'sponsor'
+  if (job.sponsor?.level === 'possible') return 'possible'
   const text = `${job.title} ${job.company} ${job.location ?? ''} ${job.description ?? ''}`.toLowerCase()
   if (/does not (offer|provide|sponsor)|unable to sponsor|cannot sponsor|will not (sponsor|provide sponsorship)|no (visa )?sponsorship available|no visa sponsorship|sponsorship is not available/.test(text)) return null
   if (/visa sponsorship available|sponsorship available|sponsor(s|ed|ing)? (a )?(visa|visas|work permit)|visa(s)? (are )?sponsor(ed|ship)|h-?1b sponsorship|skilled worker visa sponsorship/.test(text)) return 'sponsor'
@@ -83,6 +86,7 @@ function terms(value: string) {
 }
 
 function matchScore(job: Job, profile: Profile): number | null {
+  if (job.match) return job.match.score
   const skillTerms = terms(profile.skills)
   const titleTerms = terms(profile.targetTitles)
   const locationTerms = terms(profile.locations)
@@ -514,7 +518,7 @@ function App() {
               <div className="detail-stat"><span>Compensation</span><strong>{job.salary || 'Not listed'}</strong></div>
               <div className="detail-stat"><span>Saved</span><strong>{new Date(job.savedAt).toLocaleDateString()}</strong></div>
             </div>
-            <p className="save-hint" style={{ marginTop: 14 }}>Match estimate compares your saved skills, target titles, and locations with this role's text. Sponsorship is a keyword signal, not a guarantee.</p>
+            <p className="save-hint" style={{ marginTop: 14 }}>Match uses the AI fit score from Discover when available, otherwise a keyword estimate. Sponsor badges use the UK Home Office sponsor register when available, otherwise visa keywords in the ad. Always confirm sponsorship with the employer.</p>
           </section>
           <section className="panel">
             <div className="panel-head"><h2>Application kit</h2><span className="panel-caption">AI assist</span></div>
