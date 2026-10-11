@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent,
 import './App.css'
 import { addJob, deleteJob, exportAll, getSetting, importAll, listJobs, setSetting, setStatus, updateJob, type Backup, type Job, type JobSource, type JobStatus, type NewJob } from './lib/db'
 import { generateJSON, getLLMConfig } from './lib/llm'
+import { extractCvText, extractProfile } from './lib/cv'
 
 type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job'; id?: string }
 type Profile = {
@@ -123,6 +124,7 @@ function App() {
   const [importSummary, setImportSummary] = useState('')
   const [discoverQuery, setDiscoverQuery] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [fillingFromCv, setFillingFromCv] = useState(false)
   const cvInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -285,30 +287,40 @@ function App() {
 
   async function handleCvUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const fileData = typeof reader.result === 'string' ? reader.result : ''
-      let textContent = ''
-      if (file.type === 'text/plain') {
-        try {
-          const encoded = fileData.split(',')[1] ?? ''
-          textContent = new TextDecoder().decode(Uint8Array.from(atob(encoded), character => character.charCodeAt(0)))
-        } catch {
-          textContent = ''
-        }
-      }
+    try {
+      notify('Reading CV…')
+      const fileData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+        reader.onerror = () => reject(new Error('This file could not be read.'))
+        reader.readAsDataURL(file)
+      })
+      const text = await extractCvText(file)
+      setProfile(current => ({ ...current, cvFileName: file.name, cvFileData: fileData, cvText: text }))
+      notify('CV text extracted. Click "Fill from CV with AI", then save your profile.')
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'This file could not be read.')
+    }
+  }
+
+  async function fillFromCv() {
+    if (!profile.cvText.trim()) { notify('Upload or paste your CV first.'); return }
+    setFillingFromCv(true)
+    try {
+      const p = await extractProfile(profile.cvText)
       setProfile(current => ({
         ...current,
-        cvFileName: file.name,
-        cvFileData: fileData,
-        ...(file.type === 'text/plain' ? { cvText: textContent } : {}),
+        name: p.name || current.name,
+        targetTitles: p.targetTitles.join(', ') || current.targetTitles,
+        skills: p.skills.join(', ') || current.skills,
+        locations: p.locations.join(', ') || current.locations,
       }))
-      notify(file.type === 'text/plain' ? 'CV text loaded. Save your profile to keep it.' : 'CV attached locally. Save your profile to keep it.')
-    }
-    reader.onerror = () => notify('This file could not be read.')
-    reader.readAsDataURL(file)
-    event.target.value = ''
+      notify('Profile filled from your CV. Review it, then save.')
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not read your profile from the CV.')
+    } finally { setFillingFromCv(false) }
   }
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
@@ -554,7 +566,7 @@ function App() {
         <section className="panel">
           <div className="panel-head"><h2>CV & experience</h2><span className="panel-caption">PDF, DOCX, or pasted text</span></div>
           <input ref={cvInput} className="hidden-file" type="file" accept=".pdf,.doc,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain" onChange={event => void handleCvUpload(event)} />
-          <div className="drop-zone"><p>{profile.cvFileName ? `Attached: ${profile.cvFileName}` : 'Attach a CV file to keep a local copy in your profile.'}</p><button type="button" className="button small" onClick={() => cvInput.current?.click()}><Icon name="upload" size={13} />Choose file</button></div>
+          <div className="drop-zone"><p>{profile.cvFileName ? `Attached: ${profile.cvFileName}` : 'Attach a CV file to keep a local copy in your profile.'}</p><button type="button" className="button small" onClick={() => cvInput.current?.click()}><Icon name="upload" size={13} />Choose file</button><button type="button" className="button small primary" onClick={() => void fillFromCv()} disabled={fillingFromCv}>{fillingFromCv ? 'Reading CV…' : 'Fill from CV with AI'}</button></div>
           {profile.cvFileName && <div style={{ display: 'flex', gap: 12, marginTop: 9 }}><button type="button" className="text-link" onClick={() => { setProfile({ ...profile, cvFileName: '', cvFileData: '' }); notify('CV attachment removed. Save your profile to keep the change.') }}>Remove attachment</button></div>}
           <div className="field" style={{ marginTop: 15 }}><label htmlFor="cv-text">Or paste your CV text</label><textarea id="cv-text" style={{ minHeight: 190 }} value={profile.cvText} onChange={event => setProfile({ ...profile, cvText: event.target.value })} placeholder="Paste your experience, accomplishments, and skills here. Your CV content stays in your browser." /></div>
         </section>
