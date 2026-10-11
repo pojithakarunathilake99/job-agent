@@ -17,3 +17,7 @@ if (import.meta.env.DEV) {
 if (import.meta.env.DEV) {
   import('./lib/sponsors').then(m => { (window as unknown as { sponsors: typeof m }).sponsors = m })
 }
+
+if (import.meta.env.DEV) {
+  import('./lib/discover').then(m => { (window as unknown as { discover: typeof m }).discover = m })
+}

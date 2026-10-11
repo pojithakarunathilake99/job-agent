@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 export type JobStatus = 'saved' | 'applied' | 'interview' | 'offer' | 'rejected' | 'withdrawn'
-export type JobSource = 'linkedin' | 'indeed' | 'manual'
+export type JobSource = 'linkedin' | 'indeed' | 'cvlibrary' | 'adzuna' | 'reed' | 'manual'
 
 export interface Job {
   id: string

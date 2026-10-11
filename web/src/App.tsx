@@ -116,7 +116,7 @@ function App() {
   const [dragOver, setDragOver] = useState<JobStatus | null>(null)
   const [notesEditor, setNotesEditor] = useState({ jobId: '', value: '' })
   const [savingNotes, setSavingNotes] = useState(false)
-  const [secrets, setSecrets] = useState({ gemini: '', reed: '', adzuna: '' })
+  const [secrets, setSecrets] = useState({ gemini: '', reed: '', adzuna: '', adzunaId: '' })
   const [models, setModels] = useState({ scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' })
   const [settingsBusy, setSettingsBusy] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
@@ -154,13 +154,14 @@ function App() {
     let active = true
     async function initialize() {
       try {
-        const [allJobs, savedProfile, savedTheme, gemini, reed, adzuna] = await Promise.all([
+        const [allJobs, savedProfile, savedTheme, gemini, reed, adzuna, adzunaId] = await Promise.all([
           listJobs(),
           getSetting<Profile>('profile'),
           getSetting<ThemeSetting>('preferences'),
           getSetting<string>('secret:gemini'),
           getSetting<string>('secret:reed'),
           getSetting<string>('secret:adzuna'),
+          getSetting<string>('secret:adzunaId'),
         ])
         if (!active) return
         setJobs(allJobs)
@@ -168,7 +169,7 @@ function App() {
         const mode = savedTheme?.theme === 'dark' ? 'dark' : 'light'
         setTheme(mode)
         document.documentElement.dataset.theme = mode
-        setSecrets({ gemini: gemini ?? '', reed: reed ?? '', adzuna: adzuna ?? '' })
+        setSecrets({ gemini: gemini ?? '', reed: reed ?? '', adzuna: adzuna ?? '', adzunaId: adzunaId ?? '' })
         try {
           const config = await getLLMConfig()
           if (active && config) setModels({ scoringModel: config.scoringModel, writingModel: config.writingModel })
@@ -332,6 +333,7 @@ function App() {
         setSetting('secret:gemini', secrets.gemini),
         setSetting('secret:reed', secrets.reed),
         setSetting('secret:adzuna', secrets.adzuna),
+        setSetting('secret:adzunaId', secrets.adzunaId),
         setSetting('llm', models),
       ])
       setSettingsMessage('Settings saved locally. API keys are excluded from backups.')
@@ -589,7 +591,7 @@ function App() {
           <div className="form-grid">
             <div className="field full"><label htmlFor="gemini-key">Gemini API key</label><input id="gemini-key" type="password" autoComplete="new-password" value={secrets.gemini} onChange={event => setSecrets({ ...secrets, gemini: event.target.value })} placeholder="Enter Gemini API key" /></div>
             <div className="field"><label htmlFor="reed-key">Reed API key</label><input id="reed-key" type="password" autoComplete="new-password" value={secrets.reed} onChange={event => setSecrets({ ...secrets, reed: event.target.value })} placeholder="Optional" /></div>
-            <div className="field"><label htmlFor="adzuna-key">Adzuna API key</label><input id="adzuna-key" type="password" autoComplete="new-password" value={secrets.adzuna} onChange={event => setSecrets({ ...secrets, adzuna: event.target.value })} placeholder="Optional" /></div>
+            <div className="field"><label htmlFor="adzuna-id">Adzuna app ID</label><input id="adzuna-id" type="password" autoComplete="off" value={secrets.adzunaId} onChange={event => setSecrets({ ...secrets, adzunaId: event.target.value })} placeholder="Optional" /></div><div className="field"><label htmlFor="adzuna-key">Adzuna API key</label><input id="adzuna-key" type="password" autoComplete="new-password" value={secrets.adzuna} onChange={event => setSecrets({ ...secrets, adzuna: event.target.value })} placeholder="Optional" /></div>
           </div>
         </section>
         <section className="panel">
