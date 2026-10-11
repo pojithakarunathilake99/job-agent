@@ -26,8 +26,8 @@ const emptyStatusCounts: Record<JobStatus, number> = { saved: 0, applied: 0, int
 function readRoute(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
   if (raw.startsWith('job/')) return { page: 'job', id: decodeURIComponent(raw.slice(4)) }
-  if (raw === 'discover' || raw === 'profile' || raw === 'settings') return { page: raw }
-  return { page: 'dashboard' }
+  if (raw === 'dashboard' || raw === 'profile' || raw === 'settings') return { page: raw }
+  return { page: 'discover' }
 }
 
 function go(path: string) {
@@ -405,8 +405,8 @@ function App() {
   }
 
   const navigation = [
-    { page: 'dashboard', label: 'Workspace', icon: 'grid' },
     { page: 'discover', label: 'Discover', icon: 'search' },
+    { page: 'dashboard', label: 'Workspace', icon: 'grid' },
     { page: 'profile', label: 'Profile', icon: 'user' },
     { page: 'settings', label: 'Settings', icon: 'settings' },
   ] as const
