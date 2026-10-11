@@ -8,3 +8,7 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+if (import.meta.env.DEV) {
+  import('./lib/db').then(m => { (window as unknown as { jobdb: typeof m }).jobdb = m })
+}
