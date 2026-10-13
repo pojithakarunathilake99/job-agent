@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Job Agent – Save job",
+  "version": "0.1.0",
+  "description": "Save the job you're viewing on LinkedIn, Indeed or CV-Library to your Job Agent.",
+  "permissions": ["storage"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/jobs/*",
+        "https://uk.indeed.com/*",
+        "https://www.indeed.co.uk/*",
+        "https://www.cv-library.co.uk/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

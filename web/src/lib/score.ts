@@ -20,19 +20,19 @@ export async function scoreCandidates(
   const out = new Map<string, AIScore>()
   const who = `Target titles: ${profile.targetTitles}
 Skills: ${profile.skills}
-Preferred locations: ${profile.locations} (open to relocating within the UK)
+Preferred locations: ${profile.locations} (open to relocating)
 Needs visa sponsorship: ${profile.visaSponsorship ? 'yes' : 'no'}
 CV excerpt: ${(profile.cvText ?? '').slice(0, 4000)}`
 
   for (let i = 0; i < list.length; i += size) {
     const chunk = list.slice(i, i + size)
     const jobs = chunk
-      .map((c, n) => `#${n} ${c.title} | ${c.company} | ${c.location}${c.salary ? ' | ' + c.salary : ''}\n${c.snippet}`)
+      .map((c, n) => `#${n} ${c.title} | ${c.company} | ${c.location} (${(c.country ?? "gb").toUpperCase()})${c.salary ? ' | ' + c.salary : ''}\n${c.snippet}`)
       .join('\n\n')
     const r = await generateJSON<{ results: ({ i: number } & AIScore)[] }>({
       task: 'scoring',
       system:
-        'You assess job fit for a UK job seeker. Be strict and realistic about seniority and core skill gaps. Judge only from the text given.',
+        'You assess job fit for a job seeker. Be strict and realistic about seniority and core skill gaps. Judge only from the text given.',
       prompt: `CANDIDATE
 ${who}
 
@@ -41,7 +41,7 @@ ${jobs}
 
 For EVERY job return JSON {"results":[{"i":<job number>,"score":0-100,"reason":"<max 20 words>","sponsorship":"offered"|"not offered"|"not mentioned","agency":true|false}]}.
 "agency" is true if the advertiser appears to be a recruitment agency rather than the employer.
-"sponsorship" reflects only what the ad text says about UK visa sponsorship.`,
+"sponsorship" reflects only what the ad text says about work visa sponsorship.`,
     })
     for (const x of r.results ?? []) {
       const c = chunk[x.i]
