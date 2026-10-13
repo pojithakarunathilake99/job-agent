@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react'
 import './App.css'
 import { addJob, deleteJob, exportAll, getSetting, importAll, listJobs, setSetting, setStatus, updateJob, type Backup, type Job, type JobSource, type JobStatus, type NewJob } from './lib/db'
-import { generateJSON, getLLMConfig } from './lib/llm'
+import { generateJSON, getLLMConfig, PROVIDER_DEFAULTS, type Provider } from './lib/llm'
 import { extractCvText, extractProfile } from './lib/cv'
 import DiscoverPage from './DiscoverPage'
 
@@ -121,8 +121,8 @@ function App() {
   const [dragOver, setDragOver] = useState<JobStatus | null>(null)
   const [notesEditor, setNotesEditor] = useState({ jobId: '', value: '' })
   const [savingNotes, setSavingNotes] = useState(false)
-  const [secrets, setSecrets] = useState({ gemini: '', reed: '', adzuna: '', adzunaId: '' })
-  const [models, setModels] = useState({ scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' })
+  const [secrets, setSecrets] = useState({ gemini: '', groq: '', reed: '', adzuna: '', adzunaId: '' })
+  const [models, setModels] = useState<{ provider: Provider; scoringModel: string; writingModel: string }>({ provider: 'gemini', scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' })
   const [settingsBusy, setSettingsBusy] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
   const [geminiResult, setGeminiResult] = useState('')
@@ -158,7 +158,7 @@ function App() {
     let active = true
     async function initialize() {
       try {
-        const [allJobs, savedProfile, savedTheme, gemini, reed, adzuna, adzunaId] = await Promise.all([
+        const [allJobs, savedProfile, savedTheme, gemini, reed, adzuna, adzunaId, groq] = await Promise.all([
           listJobs(),
           getSetting<Profile>('profile'),
           getSetting<ThemeSetting>('preferences'),
@@ -166,6 +166,7 @@ function App() {
           getSetting<string>('secret:reed'),
           getSetting<string>('secret:adzuna'),
           getSetting<string>('secret:adzunaId'),
+          getSetting<string>('secret:groq'),
         ])
         if (!active) return
         setJobs(allJobs)
@@ -173,10 +174,10 @@ function App() {
         const mode = savedTheme?.theme === 'dark' ? 'dark' : 'light'
         setTheme(mode)
         document.documentElement.dataset.theme = mode
-        setSecrets({ gemini: gemini ?? '', reed: reed ?? '', adzuna: adzuna ?? '', adzunaId: adzunaId ?? '' })
+        setSecrets({ gemini: gemini ?? '', reed: reed ?? '', adzuna: adzuna ?? '', adzunaId: adzunaId ?? '', groq: groq ?? '' })
         try {
           const config = await getLLMConfig()
-          if (active && config) setModels({ scoringModel: config.scoringModel, writingModel: config.writingModel })
+          if (active && config) setModels({ provider: config.provider, scoringModel: config.scoringModel, writingModel: config.writingModel })
         } catch {
           // Settings remain editable even before an API key or helper configuration exists.
         }
@@ -335,6 +336,7 @@ function App() {
     try {
       await Promise.all([
         setSetting('secret:gemini', secrets.gemini),
+        setSetting('secret:groq', secrets.groq),
         setSetting('secret:reed', secrets.reed),
         setSetting('secret:adzuna', secrets.adzuna),
         setSetting('secret:adzunaId', secrets.adzunaId),
@@ -353,6 +355,7 @@ function App() {
     try {
       await Promise.all([
         setSetting('secret:gemini', secrets.gemini),
+        setSetting('secret:groq', secrets.groq),
         setSetting('llm', models),
       ])
       const result = await generateJSON<{ ok: boolean; message: string }>({ task: 'scoring', prompt: 'Return a JSON object with keys ok (boolean) and message (string). Set ok to true and message to "Connection succeeded".' })
@@ -574,7 +577,7 @@ function App() {
           <div className="panel-head"><h2>Optional API credentials</h2><span className="panel-caption">Never included in backups</span></div>
           <p className="save-hint" style={{ lineHeight: 1.6, marginBottom: 15 }}>Keys are stored in this browser only. They are not sent anywhere by this screen. Gemini is used only when you run the explicit test.</p>
           <div className="form-grid">
-            <div className="field full"><label htmlFor="gemini-key">Gemini API key</label><input id="gemini-key" type="password" autoComplete="new-password" value={secrets.gemini} onChange={event => setSecrets({ ...secrets, gemini: event.target.value })} placeholder="Enter Gemini API key" /></div>
+            <div className="field full"><label htmlFor="ai-provider">AI provider</label><select id="ai-provider" value={models.provider} onChange={event => { const provider = event.target.value as Provider; setModels({ provider, ...PROVIDER_DEFAULTS[provider] }) }}><option value="gemini">Google Gemini</option><option value="groq">Groq (gpt-oss)</option></select></div><div className="field full"><label htmlFor="groq-key">Groq API key</label><input id="groq-key" type="password" autoComplete="new-password" value={secrets.groq} onChange={event => setSecrets({ ...secrets, groq: event.target.value })} placeholder="Needed if provider is Groq" /></div><div className="field full"><label htmlFor="gemini-key">Gemini API key</label><input id="gemini-key" type="password" autoComplete="new-password" value={secrets.gemini} onChange={event => setSecrets({ ...secrets, gemini: event.target.value })} placeholder="Enter Gemini API key" /></div>
             <div className="field"><label htmlFor="reed-key">Reed API key</label><input id="reed-key" type="password" autoComplete="new-password" value={secrets.reed} onChange={event => setSecrets({ ...secrets, reed: event.target.value })} placeholder="Optional" /></div>
             <div className="field"><label htmlFor="adzuna-id">Adzuna app ID</label><input id="adzuna-id" type="password" autoComplete="off" value={secrets.adzunaId} onChange={event => setSecrets({ ...secrets, adzunaId: event.target.value })} placeholder="Optional" /></div><div className="field"><label htmlFor="adzuna-key">Adzuna API key</label><input id="adzuna-key" type="password" autoComplete="new-password" value={secrets.adzuna} onChange={event => setSecrets({ ...secrets, adzuna: event.target.value })} placeholder="Optional" /></div>
           </div>
@@ -585,7 +588,7 @@ function App() {
             <div className="field"><label htmlFor="scoring-model">Scoring model</label><input id="scoring-model" value={models.scoringModel} onChange={event => setModels({ ...models, scoringModel: event.target.value })} /></div>
             <div className="field"><label htmlFor="writing-model">Writing model</label><input id="writing-model" value={models.writingModel} onChange={event => setModels({ ...models, writingModel: event.target.value })} /></div>
           </div>
-          <div className="modal-footer" style={{ justifyContent: 'flex-start' }}><button type="button" className="button" onClick={() => void testGemini()} disabled={settingsBusy}>{settingsBusy ? 'Testing…' : 'Test Gemini'}</button><button type="submit" className="button primary" disabled={settingsBusy}>{settingsBusy ? 'Saving…' : 'Save settings'}</button></div>
+          <div className="modal-footer" style={{ justifyContent: 'flex-start' }}><button type="button" className="button" onClick={() => void testGemini()} disabled={settingsBusy}>{settingsBusy ? 'Testing…' : 'Test AI'}</button><button type="submit" className="button primary" disabled={settingsBusy}>{settingsBusy ? 'Saving…' : 'Save settings'}</button></div>
           {geminiResult && <div className="notice" role="status">{geminiResult}</div>}
           {settingsMessage && <div className="save-hint" role="status">{settingsMessage}</div>}
         </section>
