@@ -186,6 +186,14 @@ Jobs by [Adzuna](https://www.adzuna.com/).
 
 ---
 
+## Support
+
+If RoleScout helps your job search, you can support its development:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/pojithah99)
+
+---
+
 ## License
 
 RoleScout is licensed under the **PolyForm Noncommercial License 1.0.0** (see [LICENSE](LICENSE)).
