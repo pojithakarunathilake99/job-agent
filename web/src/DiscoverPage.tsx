@@ -3,6 +3,7 @@ import { addJob, getSetting, setSetting } from './lib/db'
 import { discover, planSearches, type Candidate } from './lib/discover'
 import { scoreCandidates, type AIScore } from './lib/score'
 import { COUNTRIES, countryInfo } from './lib/countries'
+import { WelcomeBanner } from './Welcome'
 
 type Row = Candidate & { ai?: AIScore }
 interface ProfileLike { targetTitles: string; skills: string; locations: string; visaSponsorship: boolean; cvText: string }
@@ -30,10 +31,14 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
   const [hideAgencies, setHideAgencies] = useState(false)
   const [minScore, setMinScore] = useState(0)
   const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [needsSetup, setNeedsSetup] = useState(false)
 
   useEffect(() => {
     getSetting<{ at: string; rows: Row[] }>('discover:last')
       .then(c => { if (c) { setRows(c.rows); setLastRun(c.at) } })
+      .catch(() => {})
+    Promise.all([getSetting('secret:gemini'), getSetting('secret:groq'), getSetting('secret:adzunaId'), getSetting('secret:adzuna')])
+      .then(([g, q, i, k]) => setNeedsSetup(!(g || q) || !(i && k)))
       .catch(() => {})
     getSetting<string[]>('discover:countries')
       .then(c => { if (c?.length) setCountries(c) })
@@ -123,6 +128,8 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
           {busy ? progress || 'Working…' : 'Find jobs'}
         </button>
       </div>
+
+      {needsSetup && <WelcomeBanner />}
 
       <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
         <div className="flex flex-col gap-3 text-sm">

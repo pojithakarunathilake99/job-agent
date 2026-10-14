@@ -77,6 +77,7 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
   }
 
   async function run() {
+    await setSetting('llm:routes', { ...routes, agent: { provider: agentProvider }, scoring: { provider: scoringProvider } })
     const ctrl = new AbortController()
     abortRef.current = ctrl
     setRunning(true)

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import GettingStarted from './GettingStarted'
+import KeyGuide from './KeyGuide'
+import { WelcomeCard } from './Welcome'
 import { getSetting, listJobs } from './lib/db'
 import { getLLMConfig } from './lib/llm'
 
@@ -66,7 +68,11 @@ export default function HelpPage({ notify }: { notify: (m: string) => void }) {
         </div>
       </div>
 
+      <WelcomeCard />
+
       <GettingStarted />
+
+      <KeyGuide />
 
       <section className="panel" style={{ padding: 18, marginBottom: 16 }}>
         <h2 className="font-semibold" style={{ fontSize: 17 }}>Chrome extension</h2>
