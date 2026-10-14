@@ -1,7 +1,7 @@
 import { getSetting } from './db'
 
 export type Provider = 'gemini' | 'groq'
-export type Task = 'scoring' | 'writing'
+export type Task = 'scoring' | 'writing' | 'agent'
 
 export interface LLMConfig { provider: Provider; scoringModel: string; writingModel: string }
 export const DEFAULT_LLM: LLMConfig = {
@@ -86,12 +86,31 @@ const groqGenerate: Adapter = async ({ model, key, prompt, system, json, signal 
 
 const adapters: Record<Provider, Adapter> = { gemini, groq: groqGenerate }
 
+// Per-task routing: setting "llm:routes" = { scoring?: {provider, model?}, writing?: ..., agent?: ... }
+export type Routes = Partial<Record<Task, { provider: Provider; model?: string }>>
+
+export async function resolveTask(task: Task): Promise<{ provider: Provider; model: string; key: string }> {
+  const routes = (await getSetting<Routes>('llm:routes')) ?? {}
+  const route = routes[task]
+  let provider: Provider
+  let model: string
+  if (route) {
+    provider = route.provider
+    const d = PROVIDER_DEFAULTS[provider]
+    model = route.model ?? (task === 'scoring' ? d.scoringModel : d.writingModel)
+  } else {
+    const cfg = await getLLMConfig()
+    provider = cfg.provider
+    model = task === 'scoring' ? cfg.scoringModel : cfg.writingModel
+  }
+  const key = await getSetting<string>(`secret:${provider}`)
+  if (!key) throw new Error(`No API key set for ${provider}`)
+  return { provider, model, key }
+}
+
 export async function generate(o: GenOpts): Promise<string> {
-  const cfg = await getLLMConfig()
-  const key = await getSetting<string>(`secret:${cfg.provider}`)
-  if (!key) throw new Error(`No API key set for ${cfg.provider}`)
-  const model = o.task === 'scoring' ? cfg.scoringModel : cfg.writingModel
-  return adapters[cfg.provider]({ ...o, model, key })
+  const { provider, model, key } = await resolveTask(o.task)
+  return adapters[provider]({ ...o, model, key })
 }
 
 export async function generateJSON<T>(o: Omit<GenOpts, 'json'>): Promise<T> {
@@ -202,9 +221,6 @@ const groqTools: ToolSessionFactory = ({ model, key, system, tools }) => {
 const toolFactories: Record<Provider, ToolSessionFactory> = { gemini: geminiTools, groq: groqTools }
 
 export async function startToolSession(o: { task: Task; system: string; tools: ToolDef[] }): Promise<ToolSession> {
-  const cfg = await getLLMConfig()
-  const key = await getSetting<string>(`secret:${cfg.provider}`)
-  if (!key) throw new Error(`No API key set for ${cfg.provider}`)
-  const model = o.task === 'scoring' ? cfg.scoringModel : cfg.writingModel
-  return toolFactories[cfg.provider]({ model, key, system: o.system, tools: o.tools })
+  const { provider, model, key } = await resolveTask(o.task)
+  return toolFactories[provider]({ model, key, system: o.system, tools: o.tools })
 }

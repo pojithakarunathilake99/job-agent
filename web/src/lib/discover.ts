@@ -139,3 +139,24 @@ export async function discover(input: DiscoverInput, onProgress?: (msg: string) 
   )
   return out.sort((a, b) => b.keywordScore - a.keywordScore)
 }
+
+export function toCandidate(j: AdzunaJob, cc: string, skills: string[], titles: string[]): Candidate {
+  const info = countryInfo(cc)
+  const title = strip(j.title)
+  const company = strip(j.company?.display_name ?? '')
+  const snippet = strip(j.description)
+  return {
+    key: `adzuna:${cc}:${j.id}`,
+    source: 'adzuna',
+    country: cc,
+    url: j.redirect_url,
+    title,
+    company,
+    location: strip(j.location?.display_name ?? ''),
+    salary: salaryText(j, info?.symbol ?? ''),
+    snippet,
+    postedAt: j.created,
+    keywordScore: keywordScore(`${title} ${snippet}`, title, skills, titles),
+    sponsor: 'n/a',
+  }
+}
