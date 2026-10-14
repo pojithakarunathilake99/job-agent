@@ -99,6 +99,12 @@ export default function HelpPage({ notify }: { notify: (m: string) => void }) {
         </div>
       </section>
 
+      <section className="panel" style={{ padding: 18, marginBottom: 16 }}>
+        <h2 className="font-semibold" style={{ fontSize: 17 }}>Support RoleScout</h2>
+        <p className="text-sm opacity-75" style={{ marginBottom: 12 }}>RoleScout is free for personal use. If it helps your job search, a coffee keeps it going.</p>
+        <a className="button" href="https://buymeacoffee.com/pojithah99" target="_blank" rel="noreferrer">☕ Buy me a coffee</a>
+      </section>
+
       <section className="panel" style={{ padding: 18 }}>
         <h2 className="font-semibold" style={{ fontSize: 17 }}>Good to know</h2>
         <ul className="text-sm" style={{ marginTop: 8, paddingLeft: 18, listStyle: 'disc', lineHeight: 1.8 }}>

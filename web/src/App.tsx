@@ -614,7 +614,7 @@ function App() {
   }
 
   function Footer() {
-    return <footer className="footer"><span>RoleScout · Your AI job scout.</span><span>Jobs by <a href="https://www.adzuna.com/" target="_blank" rel="noreferrer">Adzuna</a></span></footer>
+    return <footer className="footer"><span>RoleScout · Your AI job scout.</span><span><a href="https://buymeacoffee.com/pojithah99" target="_blank" rel="noreferrer">☕ Buy me a coffee</a> · Jobs by <a href="https://www.adzuna.com/" target="_blank" rel="noreferrer">Adzuna</a></span></footer>
   }
 
   const pageTitle: Record<Route['page'], string> = { dashboard: 'Workspace', discover: 'Discover', profile: 'Profile', settings: 'Settings', job: 'Opportunity', help: 'How to use' }
