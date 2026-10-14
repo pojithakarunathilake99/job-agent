@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Job Agent – Save job",
+  "name": "RoleScout – Save job",
   "version": "0.1.0",
   "description": "Save the job you're viewing on LinkedIn, Indeed or CV-Library to your Job Agent.",
   "permissions": ["storage"],

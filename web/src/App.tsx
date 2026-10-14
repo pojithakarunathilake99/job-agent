@@ -4,8 +4,9 @@ import { addJob, deleteJob, exportAll, getSetting, importAll, listJobs, setSetti
 import { generateJSON, getLLMConfig, PROVIDER_DEFAULTS, type Provider } from './lib/llm'
 import { extractCvText, extractProfile } from './lib/cv'
 import DiscoverPage from './DiscoverPage'
+import HelpPage from './HelpPage'
 
-type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job'; id?: string }
+type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job' | 'help'; id?: string }
 type Profile = {
   name: string
   targetTitles: string
@@ -26,7 +27,7 @@ const emptyStatusCounts: Record<JobStatus, number> = { saved: 0, applied: 0, int
 function readRoute(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
   if (raw.startsWith('job/')) return { page: 'job', id: decodeURIComponent(raw.slice(4)) }
-  if (raw === 'dashboard' || raw === 'profile' || raw === 'settings') return { page: raw }
+  if (raw === 'dashboard' || raw === 'profile' || raw === 'settings' || raw === 'help') return { page: raw }
   return { page: 'discover' }
 }
 
@@ -372,7 +373,7 @@ function App() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `fieldnote-backup-${backup.exportedAt.slice(0, 10)}.json`
+      anchor.download = `rolescout-backup-${backup.exportedAt.slice(0, 10)}.json`
       anchor.click()
       URL.revokeObjectURL(url)
       notify('Backup exported.')
@@ -416,6 +417,7 @@ function App() {
     { page: 'dashboard', label: 'Workspace', icon: 'grid' },
     { page: 'profile', label: 'Profile', icon: 'user' },
     { page: 'settings', label: 'Settings', icon: 'settings' },
+    { page: 'help', label: 'How to use', icon: 'check' },
   ] as const
 
   function NavContent() {
@@ -612,13 +614,13 @@ function App() {
   }
 
   function Footer() {
-    return <footer className="footer"><span>Fieldnote · Your search, kept close.</span><span>Jobs by <a href="https://www.adzuna.com/" target="_blank" rel="noreferrer">Adzuna</a></span></footer>
+    return <footer className="footer"><span>RoleScout · Your AI job scout.</span><span>Jobs by <a href="https://www.adzuna.com/" target="_blank" rel="noreferrer">Adzuna</a></span></footer>
   }
 
-  const pageTitle: Record<Route['page'], string> = { dashboard: 'Workspace', discover: 'Discover', profile: 'Profile', settings: 'Settings', job: 'Opportunity' }
+  const pageTitle: Record<Route['page'], string> = { dashboard: 'Workspace', discover: 'Discover', profile: 'Profile', settings: 'Settings', job: 'Opportunity', help: 'How to use' }
   return <div className="shell grid min-h-screen">
     <aside className="sidebar">
-      <button className="brand" onClick={() => go('dashboard')} aria-label="Fieldnote workspace"><span className="brand-mark">f.</span><span><span className="brand-name">fieldnote</span><span className="brand-caption">job search, in focus</span></span></button>
+      <button className="brand" onClick={() => go('dashboard')} aria-label="RoleScout workspace"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={30} height={30} /><span><span className="brand-name">RoleScout</span><span className="brand-caption">your AI job scout</span></span></button>
       <div className="nav-label">Your workspace</div>
       {NavContent()}
       <div className="sidebar-bottom">
@@ -632,6 +634,7 @@ function App() {
         {route.page === 'dashboard' && Dashboard()}
         {route.page === 'job' && Detail()}
         {route.page === 'discover' && <DiscoverPage profile={profile} notify={message => notify(message)} />}
+        {route.page === 'help' && <HelpPage notify={message => notify(message)} />}
         {route.page === 'profile' && ProfilePage()}
         {route.page === 'settings' && SettingsPage()}
       </main>

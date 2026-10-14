@@ -183,3 +183,14 @@ Please note:
 - Which job sites the extension button failed on
 
 Jobs by [Adzuna](https://www.adzuna.com/).
+
+---
+
+## License
+
+RoleScout is licensed under the **PolyForm Noncommercial License 1.0.0** (see [LICENSE](LICENSE)).
+
+- **Free** for personal use, study, research, hobby projects, and non-profit, educational or public-interest organisations.
+- **Commercial use** (using it in or for a business, selling it, or offering it as a paid service) **requires a separate licence.** Contact pojithah99@gmail.com
+
+Copyright (c) 2026 Pojitha Hettiarachchilalage

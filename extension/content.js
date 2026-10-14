@@ -98,7 +98,7 @@
 
   const btn = document.createElement('button')
   btn.className = 'ja-save-btn'
-  btn.textContent = 'Save to Job Agent'
+  btn.textContent = 'Save to RoleScout'
   btn.addEventListener('click', () => {
     const job = extract()
     console.log('[Job Agent] extracted', job)
