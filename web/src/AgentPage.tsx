@@ -28,10 +28,11 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
   const [minScore, setMinScore] = useState(70)
   const [maxSaves, setMaxSaves] = useState(5)
   const [maxSearches, setMaxSearches] = useState(8)
+  const [timeLimit, setTimeLimit] = useState(5)
   const [routes, setRoutes] = useState<Routes>({})
   const [agentProvider, setAgentProvider] = useState<Provider>('gemini')
   const [scoringProvider, setScoringProvider] = useState<Provider>('gemini')
-  const [keys, setKeys] = useState({ gemini: false, groq: false, adzuna: false })
+  const [keys, setKeys] = useState({ gemini: false, groq: false, openrouter: false, adzuna: false })
   const [running, setRunning] = useState(false)
   const [log, setLog] = useState<AgentLog[]>([])
   const [result, setResult] = useState<AgentResult | null>(null)
@@ -50,7 +51,7 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
         getSetting<string>('secret:adzunaId'), getSetting<string>('secret:adzuna'),
       ])
       if (cs?.length) setCountries(cs)
-      const k = { gemini: !!g, groq: !!q, adzuna: !!(ai && ak) }
+      const k = { gemini: !!g, groq: !!q, openrouter: false, adzuna: !!(ai && ak) }
       setKeys(k)
       setRoutes(r ?? {})
       setAgentProvider(r?.agent?.provider ?? (k.gemini ? 'gemini' : 'groq'))
@@ -86,12 +87,13 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
       const r = await runAgent(profile, {
         countries, minScore, maxSaves, maxSearches,
         maxSteps: maxSearches + 10,
+        timeLimitMs: timeLimit * 60000,
         signal: ctrl.signal,
         onLog: e => setLog(l => [...l, e]),
       })
       setResult(r)
       setLastAt(new Date().toISOString())
-      notify(`Agent finished: saved ${r.saved.length} job${r.saved.length === 1 ? '' : 's'}.`)
+      notify(`${r.stopped === 'time' ? 'Time limit reached' : r.stopped === 'user' ? 'Stopped' : 'Agent finished'}: saved ${r.saved.length} job${r.saved.length === 1 ? '' : 's'}.`)
     } catch (e) {
       setError(ctrl.signal.aborted ? 'Stopped by you.' : e instanceof Error ? e.message : String(e))
     } finally {
@@ -158,6 +160,11 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
             <label className="flex items-center gap-2">Search budget
               <select value={maxSearches} disabled={running} onChange={e => setMaxSearches(Number(e.target.value))}>
                 {[4, 8, 12, 20].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2">Time limit
+              <select value={timeLimit} disabled={running} onChange={e => setTimeLimit(Number(e.target.value))}>
+                {[3, 5, 10].map(n => <option key={n} value={n}>{n} min</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2">Agent AI

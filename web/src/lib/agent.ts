@@ -12,6 +12,7 @@ export interface AgentOptions {
   maxSaves?: number
   maxSearches?: number
   maxSteps?: number
+  timeLimitMs?: number
   signal?: AbortSignal
   onLog?: (e: AgentLog) => void
 }
@@ -22,6 +23,7 @@ export interface AgentResult {
   scored: number
   steps: number
   log: AgentLog[]
+  stopped?: 'time' | 'user'
 }
 
 type PoolItem = Candidate & { ai?: AIScore }
@@ -70,20 +72,26 @@ const TOOLS: ToolDef[] = [
   },
 ]
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>(r => {
+    const t = setTimeout(r, ms)
+    signal?.addEventListener('abort', () => { clearTimeout(t); r() }, { once: true })
+  })
 
 // Retry on rate limits (429), waiting as long as the provider asks (max 3 tries)
-async function withRetry<T>(fn: () => Promise<T>, emit: (k: AgentLog['kind'], t: string) => void): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, emit: (k: AgentLog['kind'], t: string) => void, signal?: AbortSignal): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn()
     } catch (e) {
+      if (signal?.aborted) throw e
       const msg = e instanceof Error ? e.message : String(e)
-      if (attempt >= 5 || !/\b(429|503)\b|rate limit|try again|overloaded|unavailable/i.test(msg)) throw e
+      if (attempt >= 5 || !/\b(429|503)\b|rate.?limit|try again|overloaded|unavailable/i.test(msg)) throw e
       const m = msg.match(/in (?:(\d+)m)?([\d.]+)s/)
       const wait = /tokens per minute|TPM/i.test(msg) ? 60000 : m ? (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000 + 500 : 10000
       emit('error', `AI provider busy or rate-limited, retrying in ${Math.round(wait / 1000)}s…`)
-      await sleep(Math.min(wait, 70000))
+      await sleep(Math.min(wait, 70000), signal)
+      if (signal?.aborted) throw new Error('aborted')
     }
   }
 }
@@ -93,6 +101,7 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
   const maxSaves = opts.maxSaves ?? 10
   const maxSearches = opts.maxSearches ?? 12
   const maxSteps = opts.maxSteps ?? 20
+  const timeLimitMs = opts.timeLimitMs ?? 5 * 60 * 1000
   const countries = opts.countries.filter(c => countryInfo(c)?.adzuna)
   if (!countries.length) throw new Error('Pick at least one supported country')
   if (!list(profile.targetTitles).length) throw new Error('Add target titles to your profile first')
@@ -215,43 +224,68 @@ GOAL: Find and save up to ${maxSaves} of the best-fitting live jobs with AI scor
 Allowed countries: ${allowed}
 BUDGET: ${maxSearches} searches, ${maxSteps} steps.`
 
-  emit('goal', `Countries: ${allowed} · min score ${minScore} · up to ${maxSaves} saves · ${maxSearches} searches`)
-  const session = await startToolSession({ task: 'agent', system: SYSTEM, tools: TOOLS })
-  let r: ToolReply = await withRetry(() => session.send({ text: goal }, opts.signal), emit)
-  let steps = 0
-  let nudged = false
+  emit('goal', `Countries: ${allowed} · min score ${minScore} · up to ${maxSaves} saves · ${maxSearches} searches · ${Math.round(timeLimitMs / 60000)} min limit`)
 
-  for (;;) {
-    steps++
-    if (r.text) emit('thought', r.text)
-    if (!r.calls.length) {
-      if (!summary) summary = r.text
-      break
-    }
-    const results: { call: ToolCall; result: unknown }[] = []
-    for (const call of r.calls) {
-      emit('call', `${call.name}(${JSON.stringify(call.args)})`)
-      let result: Record<string, unknown>
-      try {
-        result = await withRetry(() => exec(call), emit)
-      } catch (e) {
-        result = { error: e instanceof Error ? e.message : String(e) }
+  // One stop signal for both the time limit and the user's Stop button
+  const ctrl = new AbortController()
+  const state: { stopped?: 'time' | 'user' } = {}
+  const timer = setTimeout(() => { state.stopped ??= 'time'; ctrl.abort() }, timeLimitMs)
+  const onUserAbort = () => { state.stopped ??= 'user'; ctrl.abort() }
+  if (opts.signal?.aborted) onUserAbort()
+  opts.signal?.addEventListener('abort', onUserAbort, { once: true })
+  const sig = ctrl.signal
+  let steps = 0
+
+  try {
+    const session = await startToolSession({ task: 'agent', system: SYSTEM, tools: TOOLS })
+    let r: ToolReply = await withRetry(() => session.send({ text: goal }, sig), emit, sig)
+    let nudged = false
+    for (;;) {
+      steps++
+      if (r.text) emit('thought', r.text)
+      if (!r.calls.length) {
+        if (!summary) summary = r.text
+        break
       }
-      emit(result.error ? 'error' : 'result', describe(call.name, result))
-      results.push({ call, result })
+      const results: { call: ToolCall; result: unknown }[] = []
+      for (const call of r.calls) {
+        if (sig.aborted) break
+        emit('call', `${call.name}(${JSON.stringify(call.args)})`)
+        let result: Record<string, unknown>
+        try {
+          result = await withRetry(() => exec(call), emit, sig)
+        } catch (e) {
+          if (sig.aborted) break
+          result = { error: e instanceof Error ? e.message : String(e) }
+        }
+        emit(result.error ? 'error' : 'result', describe(call.name, result))
+        results.push({ call, result })
+      }
+      if (summary || sig.aborted) break
+      if (steps >= maxSteps) {
+        if (nudged) break
+        nudged = true
+        r = await withRetry(() => session.send({ results, text: 'Step limit reached. Call finish now with your summary.' }, sig), emit, sig)
+        continue
+      }
+      r = await withRetry(() => session.send({ results }, sig), emit, sig)
     }
-    if (summary) break
-    if (steps >= maxSteps) {
-      if (nudged) break
-      nudged = true
-      r = await withRetry(() => session.send({ results, text: 'Step limit reached. Call finish now with your summary.' }, opts.signal), emit)
-      continue
-    }
-    r = await withRetry(() => session.send({ results }, opts.signal), emit)
+  } catch (e) {
+    if (!sig.aborted) throw e
+  } finally {
+    clearTimeout(timer)
+    opts.signal?.removeEventListener('abort', onUserAbort)
   }
 
+  if (state.stopped && !summary) {
+    const why = state.stopped === 'time' ? `Time limit (${Math.round(timeLimitMs / 60000)} min) reached` : 'Stopped by you'
+    summary =
+      `${why}. Searched ${searches} time${searches === 1 ? '' : 's'}, scored ${scored} job${scored === 1 ? '' : 's'}, saved ${saved.length}` +
+      (saved.length ? `: ${saved.map(s => `${s.title} at ${s.company} (${s.score})`).join('; ')}.` : '.') +
+      (saved.length ? ' Saved picks are in Workspace.' : '')
+  }
   emit('done', summary || 'Finished without a summary.')
-  const result: AgentResult = { summary, saved, searches, scored, steps, log }
+  const result: AgentResult = { summary, saved, searches, scored, steps, log, stopped: state.stopped }
   await setSetting('agent:lastRun', { at: new Date().toISOString(), result })
   return result
 }

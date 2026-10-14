@@ -110,6 +110,16 @@ function matchScore(job: Job, profile: Profile): number | null {
 function App() {
   const [route, setRoute] = useState<Route>(readRoute)
   const [jobs, setJobs] = useState<Job[]>([])
+  // Reload the job list whenever the DB changes or the page changes
+  useEffect(() => {
+    const reload = () => { void listJobs().then(setJobs).catch(() => {}) }
+    window.addEventListener('rs:jobs-changed', reload)
+    window.addEventListener('hashchange', reload)
+    return () => {
+      window.removeEventListener('rs:jobs-changed', reload)
+      window.removeEventListener('hashchange', reload)
+    }
+  }, [])
   const [profile, setProfile] = useState<Profile>(blankProfile)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [loading, setLoading] = useState(true)

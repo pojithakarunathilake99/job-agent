@@ -44,6 +44,9 @@ export const db = () =>
 
 const now = () => new Date().toISOString()
 
+// Tell the UI that jobs changed (agent/Discover/extension write directly to the DB)
+const changed = () => { try { window.dispatchEvent(new Event('rs:jobs-changed')) } catch { /* no window */ } }
+
 // Strip tracking params; keep only job identifiers (Indeed jk, LinkedIn currentJobId)
 export function normalizeUrl(u: string): string {
   const x = new URL(u)
@@ -71,6 +74,7 @@ export async function addJob(input: NewJob): Promise<{ job: Job; created: boolea
     savedAt: t, updatedAt: t,
   }
   await d.add('jobs', job)
+  changed()
   return { job, created: true }
 }
 
@@ -90,6 +94,7 @@ export async function updateJob(id: string, patch: Partial<Omit<Job, 'id' | 'his
   if (!job) throw new Error(`Job ${id} not found`)
   const next: Job = { ...job, ...patch, id, updatedAt: now() }
   await d.put('jobs', next)
+  changed()
   return next
 }
 
@@ -101,11 +106,13 @@ export async function setStatus(id: string, status: JobStatus, by: 'manual' | 'g
   const t = now()
   const next: Job = { ...job, status, updatedAt: t, history: [...job.history, { status, at: t, by }] }
   await d.put('jobs', next)
+  changed()
   return next
 }
 
 export async function deleteJob(id: string) {
   await (await db()).delete('jobs', id)
+  changed()
 }
 
 // Settings; keys starting with "secret:" (e.g. API key) are never exported
@@ -147,5 +154,6 @@ export async function importAll(b: Backup): Promise<{ imported: number; skipped:
   for (const [k, v] of Object.entries(b.settings ?? {}))
     if (!k.startsWith('secret:')) await tx.objectStore('settings').put(v, k)
   await tx.done
+  changed()
   return { imported, skipped }
 }

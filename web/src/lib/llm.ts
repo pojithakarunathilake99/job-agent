@@ -1,6 +1,6 @@
 import { getSetting } from './db'
 
-export type Provider = 'gemini' | 'groq'
+export type Provider = 'gemini' | 'groq' | 'openrouter'
 export type Task = 'scoring' | 'writing' | 'agent'
 
 export interface LLMConfig { provider: Provider; scoringModel: string; writingModel: string }
@@ -14,13 +14,15 @@ export const DEFAULT_LLM: LLMConfig = {
 export const PROVIDER_DEFAULTS: Record<Provider, { scoringModel: string; writingModel: string }> = {
   gemini: { scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' },
   groq: { scoringModel: 'openai/gpt-oss-20b', writingModel: 'openai/gpt-oss-120b' },
+  openrouter: { scoringModel: 'nvidia/nemotron-3-super-120b-a12b:free', writingModel: 'nvidia/nemotron-3-super-120b-a12b:free' },
 }
-const belongs = (p: Provider, m?: string) => !!m && (p === 'gemini') === m.startsWith('gemini')
+const belongs = (p: Provider, m?: string) =>
+  !!m && (p === 'gemini' ? m.startsWith('gemini') : p === 'openrouter' ? m.endsWith(':free') : !m.startsWith('gemini') && !m.endsWith(':free'))
 
 // Saved models are only used if they belong to the selected provider; otherwise provider defaults
 export async function getLLMConfig(): Promise<LLMConfig> {
   const s = (await getSetting<Partial<LLMConfig>>('llm')) ?? {}
-  const provider: Provider = s.provider === 'groq' ? 'groq' : 'gemini'
+  const provider: Provider = s.provider === 'groq' || s.provider === 'openrouter' ? s.provider : 'gemini'
   const d = PROVIDER_DEFAULTS[provider]
   return {
     provider,
@@ -84,7 +86,46 @@ const groqGenerate: Adapter = async ({ model, key, prompt, system, json, signal 
   return text
 }
 
-const adapters: Record<Provider, Adapter> = { gemini, groq: groqGenerate }
+// ---------- OpenRouter (free models only) ----------
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+
+async function openrouterChat(key: string, body: Record<string, unknown>, signal?: AbortSignal) {
+  const model = String(body.model)
+  if (!model.endsWith(':free')) throw new Error(`Only free OpenRouter models are allowed (got ${model}). Use a model ID ending in :free.`)
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+      'HTTP-Referer': location.origin,
+      'X-Title': 'RoleScout',
+    },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json()
+  if (!res.ok || data?.error) {
+    const raw = data?.error?.metadata?.raw ? ` ${String(data.error.metadata.raw)}` : ''
+    throw new Error(`OpenRouter ${res.status} (${model}): ${data?.error?.message ?? 'request failed'}${raw}`)
+  }
+  return data
+}
+
+const openrouterGenerate: Adapter = async ({ model, key, prompt, system, json, signal }) => {
+  const data = await openrouterChat(key, {
+    model,
+    messages: [
+      ...(system ? [{ role: 'system', content: system }] : []),
+      { role: 'user', content: json ? `${prompt}\n\nReply with valid JSON only, no other text.` : prompt },
+    ],
+    max_tokens: 4096,
+  }, signal)
+  const text = data?.choices?.[0]?.message?.content ?? ''
+  if (!text) throw new Error('Empty response: ' + (data?.choices?.[0]?.finish_reason ?? 'unknown'))
+  return text
+}
+
+const adapters: Record<Provider, Adapter> = { gemini, groq: groqGenerate, openrouter: openrouterGenerate }
 
 // Per-task routing: setting "llm:routes" = { scoring?: {provider, model?}, writing?: ..., agent?: ... }
 export type Routes = Partial<Record<Task, { provider: Provider; model?: string }>>
@@ -218,7 +259,28 @@ const groqTools: ToolSessionFactory = ({ model, key, system, tools }) => {
   }
 }
 
-const toolFactories: Record<Provider, ToolSessionFactory> = { gemini: geminiTools, groq: groqTools }
+const openrouterTools: ToolSessionFactory = ({ model, key, system, tools }) => {
+  const messages: OAIMessage[] = [{ role: 'system', content: system }]
+  const toolSpec = tools.map(t => ({ type: 'function', function: t }))
+  return {
+    async send(input, signal) {
+      for (const r of input.results ?? [])
+        messages.push({ role: 'tool', tool_call_id: r.call.id ?? '', content: JSON.stringify(r.result) })
+      if (input.text) messages.push({ role: 'user', content: input.text })
+      const data = await openrouterChat(key, { model, messages, tools: toolSpec, max_tokens: 4096 }, signal)
+      const msg = data?.choices?.[0]?.message
+      if (!msg) throw new Error('Empty response: ' + (data?.choices?.[0]?.finish_reason ?? 'unknown'))
+      messages.push({ role: 'assistant', content: msg.content ?? null, ...(msg.tool_calls ? { tool_calls: msg.tool_calls } : {}) })
+      return {
+        text: (msg.content ?? '').trim(),
+        calls: ((msg.tool_calls ?? []) as OAIToolCall[]).map(c => ({ id: c.id, name: c.function.name, args: safeParse(c.function.arguments) })),
+        usage: { input: data?.usage?.prompt_tokens ?? 0, output: data?.usage?.completion_tokens ?? 0 },
+      }
+    },
+  }
+}
+
+const toolFactories: Record<Provider, ToolSessionFactory> = { gemini: geminiTools, groq: groqTools, openrouter: openrouterTools }
 
 export async function startToolSession(o: { task: Task; system: string; tools: ToolDef[] }): Promise<ToolSession> {
   const { provider, model, key } = await resolveTask(o.task)
