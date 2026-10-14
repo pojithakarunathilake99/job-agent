@@ -33,3 +33,15 @@ if (import.meta.env.DEV) {
 if (import.meta.env.DEV) {
   import('./lib/agent').then(m => { (window as unknown as { agent: typeof m }).agent = m })
 }
+
+// After a new deploy, an open tab may request old chunk files that no longer exist.
+// Reload once to pick up the latest build (guarded to avoid reload loops).
+window.addEventListener('vite:preloadError', event => {
+  try {
+    if (sessionStorage.getItem('rs:reloaded')) return
+    sessionStorage.setItem('rs:reloaded', '1')
+    event.preventDefault()
+    window.location.reload()
+  } catch { /* storage blocked: let the error surface */ }
+})
+setTimeout(() => { try { sessionStorage.removeItem('rs:reloaded') } catch { /* ignore */ } }, 15000)
