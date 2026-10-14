@@ -7,12 +7,12 @@ export interface LLMConfig { provider: Provider; scoringModel: string; writingMo
 export const DEFAULT_LLM: LLMConfig = {
   provider: 'gemini',
   scoringModel: 'gemini-3.5-flash-lite',
-  writingModel: 'gemini-3.8-flash',
+  writingModel: 'gemini-3.5-flash-lite',
 }
 
 // Settings: "llm" = LLMConfig overrides; API key in "secret:<provider>" (never exported)
 export const PROVIDER_DEFAULTS: Record<Provider, { scoringModel: string; writingModel: string }> = {
-  gemini: { scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.8-flash' },
+  gemini: { scoringModel: 'gemini-3.5-flash-lite', writingModel: 'gemini-3.5-flash-lite' },
   groq: { scoringModel: 'openai/gpt-oss-20b', writingModel: 'openai/gpt-oss-120b' },
   openrouter: { scoringModel: 'nvidia/nemotron-3-super-120b-a12b:free', writingModel: 'nvidia/nemotron-3-super-120b-a12b:free' },
 }
