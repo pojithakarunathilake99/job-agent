@@ -22,12 +22,12 @@ export async function scoreCandidates(
 Skills: ${profile.skills}
 Preferred locations: ${profile.locations} (open to relocating)
 Needs visa sponsorship: ${profile.visaSponsorship ? 'yes' : 'no'}
-CV excerpt: ${(profile.cvText ?? '').slice(0, 4000)}`
+CV excerpt: ${(profile.cvText ?? '').slice(0, 1500)}`
 
   for (let i = 0; i < list.length; i += size) {
     const chunk = list.slice(i, i + size)
     const jobs = chunk
-      .map((c, n) => `#${n} ${c.title} | ${c.company} | ${c.location} (${(c.country ?? "gb").toUpperCase()})${c.salary ? ' | ' + c.salary : ''}\n${c.snippet}`)
+      .map((c, n) => `#${n} ${c.title} | ${c.company} | ${c.location} (${(c.country ?? "gb").toUpperCase()})${c.salary ? ' | ' + c.salary : ''}\n${c.snippet.slice(0, 600)}`)
       .join('\n\n')
     const r = await generateJSON<{ results: ({ i: number } & AIScore)[] }>({
       task: 'scoring',
