@@ -4,7 +4,7 @@ An AI job-search agent that runs entirely in your browser. It searches for jobs,
 
 > **Status:** early test version. Your data stays in your browser. The only data that leaves it is the API calls made with your own keys.
 
-**Live app:** https://pojithakarunathilake99.github.io/role-scout/
+**Live app:** https://rolescout.online/
 
 ---
 
@@ -107,13 +107,13 @@ mkdir -p public/data && cp ../data/sponsors.json public/data/
 npm run dev
 ```
 
-Open http://localhost:5173/role-scout/
+Open http://localhost:5173/
 
 In dev mode, the console exposes `jobdb`, `llm`, `sponsors`, `discover`, `score` and `agent`.
 
 To point the extension at your local app, open the extension's service worker console (`chrome://extensions` → *Inspect views: service worker*) and run:
 ```js
-chrome.storage.sync.set({ appUrl: 'http://localhost:5173/role-scout/' })
+chrome.storage.sync.set({ appUrl: 'http://localhost:5173/' })
 ```
 
 ---
