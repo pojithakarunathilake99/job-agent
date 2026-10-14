@@ -5,8 +5,9 @@ import { generateJSON, getLLMConfig, PROVIDER_DEFAULTS, type Provider } from './
 import { extractCvText, extractProfile } from './lib/cv'
 import DiscoverPage from './DiscoverPage'
 import HelpPage from './HelpPage'
+import AgentPage from './AgentPage'
 
-type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job' | 'help'; id?: string }
+type Route = { page: 'dashboard' | 'discover' | 'profile' | 'settings' | 'job' | 'help' | 'agent'; id?: string }
 type Profile = {
   name: string
   targetTitles: string
@@ -27,7 +28,7 @@ const emptyStatusCounts: Record<JobStatus, number> = { saved: 0, applied: 0, int
 function readRoute(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
   if (raw.startsWith('job/')) return { page: 'job', id: decodeURIComponent(raw.slice(4)) }
-  if (raw === 'dashboard' || raw === 'profile' || raw === 'settings' || raw === 'help') return { page: raw }
+  if (raw === 'dashboard' || raw === 'profile' || raw === 'settings' || raw === 'help' || raw === 'agent') return { page: raw }
   return { page: 'discover' }
 }
 
@@ -414,6 +415,7 @@ function App() {
 
   const navigation = [
     { page: 'discover', label: 'Discover', icon: 'search' },
+    { page: 'agent', label: 'Agent', icon: 'shield' },
     { page: 'dashboard', label: 'Workspace', icon: 'grid' },
     { page: 'profile', label: 'Profile', icon: 'user' },
     { page: 'settings', label: 'Settings', icon: 'settings' },
@@ -617,7 +619,7 @@ function App() {
     return <footer className="footer"><span>RoleScout · Your AI job scout.</span><span><a href="https://buymeacoffee.com/pojithah99" target="_blank" rel="noreferrer">☕ Buy me a coffee</a> · Jobs by <a href="https://www.adzuna.com/" target="_blank" rel="noreferrer">Adzuna</a></span></footer>
   }
 
-  const pageTitle: Record<Route['page'], string> = { dashboard: 'Workspace', discover: 'Discover', profile: 'Profile', settings: 'Settings', job: 'Opportunity', help: 'How to use' }
+  const pageTitle: Record<Route['page'], string> = { dashboard: 'Workspace', discover: 'Discover', profile: 'Profile', settings: 'Settings', job: 'Opportunity', help: 'How to use', agent: 'Agent' }
   return <div className="shell grid min-h-screen">
     <aside className="sidebar">
       <button className="brand" onClick={() => go('dashboard')} aria-label="RoleScout workspace"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={30} height={30} /><span><span className="brand-name">RoleScout</span><span className="brand-caption">your AI job scout</span></span></button>
@@ -635,6 +637,7 @@ function App() {
         {route.page === 'job' && Detail()}
         {route.page === 'discover' && <DiscoverPage profile={profile} notify={message => notify(message)} />}
         {route.page === 'help' && <HelpPage notify={message => notify(message)} />}
+        {route.page === 'agent' && <AgentPage profile={profile} notify={message => notify(message)} />}
         {route.page === 'profile' && ProfilePage()}
         {route.page === 'settings' && SettingsPage()}
       </main>

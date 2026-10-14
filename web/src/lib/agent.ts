@@ -79,10 +79,10 @@ async function withRetry<T>(fn: () => Promise<T>, emit: (k: AgentLog['kind'], t:
       return await fn()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (attempt >= 5 || !/\b429\b|rate limit|try again/i.test(msg)) throw e
+      if (attempt >= 5 || !/\b(429|503)\b|rate limit|try again|overloaded|unavailable/i.test(msg)) throw e
       const m = msg.match(/in (?:(\d+)m)?([\d.]+)s/)
       const wait = /tokens per minute|TPM/i.test(msg) ? 60000 : m ? (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000 + 500 : 10000
-      emit('error', `Rate limited, waiting ${Math.round(wait / 1000)}s…`)
+      emit('error', `AI provider busy or rate-limited, retrying in ${Math.round(wait / 1000)}s…`)
       await sleep(Math.min(wait, 70000))
     }
   }
