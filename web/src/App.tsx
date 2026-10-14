@@ -120,6 +120,12 @@ function App() {
       window.removeEventListener('hashchange', reload)
     }
   }, [])
+  // Show AI provider switch / limit messages as toasts
+  useEffect(() => {
+    const onNotice = (e: Event) => notify((e as CustomEvent<string>).detail)
+    window.addEventListener('rs:notice', onNotice)
+    return () => window.removeEventListener('rs:notice', onNotice)
+  }, [])
   const [profile, setProfile] = useState<Profile>(blankProfile)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [loading, setLoading] = useState(true)

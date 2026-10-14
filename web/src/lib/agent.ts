@@ -1,5 +1,5 @@
 import { addJob, setSetting } from './db'
-import { startToolSession, type ToolCall, type ToolDef, type ToolReply } from './llm'
+import { announce, fmtDur, markExhausted, parseDailyLimit, startToolSession, type ToolCall, type ToolDef, type ToolReply } from './llm'
 import { searchAdzuna, toCandidate, isAgency, list, type Candidate } from './discover'
 import { matchSponsor, normalizeCompany } from './sponsors'
 import { scoreCandidates, type AIScore, type ScoreProfile } from './score'
@@ -86,6 +86,7 @@ async function withRetry<T>(fn: () => Promise<T>, emit: (k: AgentLog['kind'], t:
     } catch (e) {
       if (signal?.aborted) throw e
       const msg = e instanceof Error ? e.message : String(e)
+      if (parseDailyLimit(msg) !== null) throw e
       if (attempt >= 5 || !/\b(429|503)\b|rate.?limit|try again|overloaded|unavailable/i.test(msg)) throw e
       const m = msg.match(/in (?:(\d+)m)?([\d.]+)s/)
       const wait = /tokens per minute|TPM/i.test(msg) ? 60000 : m ? (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000 + 500 : 10000
@@ -118,6 +119,7 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
   const skills = list(profile.skills)
   const titles = list(profile.targetTitles)
   let searches = 0
+  const queries: string[] = []
   let scored = 0
   let summary = ''
 
@@ -133,6 +135,7 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
         const query = String(a.query ?? '').trim()
         if (!query) return { error: 'Empty query' }
         searches++
+        queries.push(`${country}: ${query}`)
         const days = Math.min(30, Math.max(1, Number(a.max_days_old) || 14))
         const jobs = await searchAdzuna(query, { country, maxDaysOld: days })
         const fresh: PoolItem[] = []
@@ -237,8 +240,35 @@ BUDGET: ${maxSearches} searches, ${maxSteps} steps.`
   let steps = 0
 
   try {
-    const session = await startToolSession({ task: 'agent', system: SYSTEM, tools: TOOLS })
-    let r: ToolReply = await withRetry(() => session.send({ text: goal }, sig), emit, sig)
+    let session = await startToolSession({ task: 'agent', system: SYSTEM, tools: TOOLS })
+    emit('goal', `Agent AI: ${session.label}`)
+    const progress = () =>
+      `Searched: ${queries.join('; ') || 'nothing yet'}. Searches left: ${maxSearches - searches}. ` +
+      `Saved: ${saved.map(s => `${s.title} @ ${s.company} (${s.score})`).join('; ') || 'none'}. ` +
+      `Scored ids: ${[...pool.values()].filter(c => c.ai).map(c => `${c.key}=${c.ai!.score}`).join(', ') || 'none'}.`
+    // Send to the AI; on a DAILY limit, switch provider/model, tell the user, and continue with a progress summary
+    const send = async (input: { text?: string; results?: { call: ToolCall; result: unknown }[] }): Promise<ToolReply> => {
+      for (;;) {
+        try {
+          return await withRetry(() => session.send(input, sig), emit, sig)
+        } catch (e) {
+          const ms = parseDailyLimit(e instanceof Error ? e.message : String(e))
+          if (ms === null || sig.aborted) throw e
+          await markExhausted(session.provider, session.model, ms)
+          const from = session.label
+          try {
+            session = await startToolSession({ task: 'agent', system: SYSTEM, tools: TOOLS })
+          } catch {
+            throw new Error(`${from} reached its free daily limit (resets in ${fmtDur(ms)}) and no other AI provider is available. Add another AI key in Settings.`)
+          }
+          const note = `${from} reached its free daily limit (resets in ${fmtDur(ms)}). Switching to ${session.label}.`
+          emit('error', note)
+          announce(note)
+          input = { text: `${goal}\n\nPROGRESS SO FAR (continue from here; do not repeat these searches): ${progress()}` }
+        }
+      }
+    }
+    let r: ToolReply = await send({ text: goal })
     let nudged = false
     for (;;) {
       steps++
@@ -265,10 +295,10 @@ BUDGET: ${maxSearches} searches, ${maxSteps} steps.`
       if (steps >= maxSteps) {
         if (nudged) break
         nudged = true
-        r = await withRetry(() => session.send({ results, text: 'Step limit reached. Call finish now with your summary.' }, sig), emit, sig)
+        r = await send({ results, text: 'Step limit reached. Call finish now with your summary.' })
         continue
       }
-      r = await withRetry(() => session.send({ results }, sig), emit, sig)
+      r = await send({ results })
     }
   } catch (e) {
     if (!sig.aborted) throw e

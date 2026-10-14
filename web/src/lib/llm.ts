@@ -1,4 +1,4 @@
-import { getSetting } from './db'
+import { getSetting, setSetting } from './db'
 
 export type Provider = 'gemini' | 'groq' | 'openrouter'
 export type Task = 'scoring' | 'writing' | 'agent'
@@ -130,28 +130,90 @@ const adapters: Record<Provider, Adapter> = { gemini, groq: groqGenerate, openro
 // Per-task routing: setting "llm:routes" = { scoring?: {provider, model?}, writing?: ..., agent?: ... }
 export type Routes = Partial<Record<Task, { provider: Provider; model?: string }>>
 
-export async function resolveTask(task: Task): Promise<{ provider: Provider; model: string; key: string }> {
+const LABEL: Record<Provider, string> = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' }
+export const modelLabel = (p: Provider, m: string) => `${LABEL[p]} ${m}`
+const NO_PROVIDER = 'No AI provider is available: add a Gemini, Groq or OpenRouter key in Settings, or wait for daily limits to reset.'
+
+// Tell the UI something it should show as a toast
+export function announce(text: string) {
+  try { window.dispatchEvent(new CustomEvent('rs:notice', { detail: text })) } catch { /* no window */ }
+}
+
+export const fmtDur = (ms: number) => {
+  const h = Math.floor(ms / 3600000)
+  const m = Math.max(1, Math.round((ms % 3600000) / 60000))
+  return h ? `${h}h ${m}m` : `${m} min`
+}
+
+// Returns ms until reset if the error is a DAILY quota limit, otherwise null (per-minute limits are retried elsewhere)
+export function parseDailyLimit(msg: string): number | null {
+  const m = msg.match(/(?:retry|try again) in (?:(\d+)h)?(?:(\d+)m)?([\d.]+)s/i)
+  const ms = m ? (Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3])) * 1000 : null
+  if (/per ?day|PerDay|\bRPD\b|\bTPD\b|free-models-per-day/i.test(msg)) return ms && ms > 0 ? ms : 6 * 3600 * 1000
+  if (ms !== null && ms > 15 * 60 * 1000) return ms
+  return null
+}
+
+const EXH = 'llm:exhausted'
+export async function markExhausted(provider: Provider, model: string, ms: number) {
+  const cur = (await getSetting<Record<string, string>>(EXH)) ?? {}
+  cur[`${provider}|${model}`] = new Date(Date.now() + ms).toISOString()
+  await setSetting(EXH, cur)
+}
+
+// Ordered list of usable {provider, model, key} for a task, skipping models whose daily quota is used up
+export async function candidates(task: Task): Promise<{ provider: Provider; model: string; key: string }[]> {
   const routes = (await getSetting<Routes>('llm:routes')) ?? {}
+  const pick = (p: Provider) => (task === 'scoring' ? PROVIDER_DEFAULTS[p].scoringModel : PROVIDER_DEFAULTS[p].writingModel)
+  let first: { provider: Provider; model: string }
   const route = routes[task]
-  let provider: Provider
-  let model: string
-  if (route) {
-    provider = route.provider
-    const d = PROVIDER_DEFAULTS[provider]
-    model = route.model ?? (task === 'scoring' ? d.scoringModel : d.writingModel)
-  } else {
+  if (route) first = { provider: route.provider, model: route.model ?? pick(route.provider) }
+  else {
     const cfg = await getLLMConfig()
-    provider = cfg.provider
-    model = task === 'scoring' ? cfg.scoringModel : cfg.writingModel
+    first = { provider: cfg.provider, model: task === 'scoring' ? cfg.scoringModel : cfg.writingModel }
   }
-  const key = await getSetting<string>(`secret:${provider}`)
-  if (!key) throw new Error(`No API key set for ${provider}`)
-  return { provider, model, key }
+  const order = [first]
+  if (first.provider === 'gemini' && first.model !== 'gemini-3.5-flash-lite') order.push({ provider: 'gemini', model: 'gemini-3.5-flash-lite' })
+  for (const p of ['gemini', 'groq', 'openrouter'] as Provider[]) if (p !== first.provider) order.push({ provider: p, model: pick(p) })
+
+  const exh = (await getSetting<Record<string, string>>(EXH)) ?? {}
+  const out: { provider: Provider; model: string; key: string }[] = []
+  for (const c of order) {
+    const until = exh[`${c.provider}|${c.model}`]
+    if (until && new Date(until) > new Date()) continue
+    if (out.some(o => o.provider === c.provider && o.model === c.model)) continue
+    const key = await getSetting<string>(`secret:${c.provider}`)
+    if (key) out.push({ ...c, key })
+  }
+  return out
+}
+
+export async function resolveTask(task: Task): Promise<{ provider: Provider; model: string; key: string }> {
+  const [c] = await candidates(task)
+  if (!c) throw new Error(NO_PROVIDER)
+  return c
 }
 
 export async function generate(o: GenOpts): Promise<string> {
-  const { provider, model, key } = await resolveTask(o.task)
-  return adapters[provider]({ ...o, model, key })
+  const list = await candidates(o.task)
+  if (!list.length) throw new Error(NO_PROVIDER)
+  let lastErr: unknown
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i]
+    try {
+      return await adapters[c.provider]({ ...o, model: c.model, key: c.key })
+    } catch (e) {
+      const ms = parseDailyLimit(e instanceof Error ? e.message : String(e))
+      if (ms === null) throw e
+      await markExhausted(c.provider, c.model, ms)
+      const next = list[i + 1]
+      announce(next
+        ? `${modelLabel(c.provider, c.model)} reached its free daily limit (resets in ${fmtDur(ms)}). Switching to ${modelLabel(next.provider, next.model)}.`
+        : `${modelLabel(c.provider, c.model)} reached its free daily limit (resets in ${fmtDur(ms)}). No other AI provider is available. Add another key in Settings.`)
+      lastErr = e
+    }
+  }
+  throw lastErr
 }
 
 export async function generateJSON<T>(o: Omit<GenOpts, 'json'>): Promise<T> {
@@ -282,7 +344,9 @@ const openrouterTools: ToolSessionFactory = ({ model, key, system, tools }) => {
 
 const toolFactories: Record<Provider, ToolSessionFactory> = { gemini: geminiTools, groq: groqTools, openrouter: openrouterTools }
 
-export async function startToolSession(o: { task: Task; system: string; tools: ToolDef[] }): Promise<ToolSession> {
+export type LabeledToolSession = ToolSession & { provider: Provider; model: string; label: string }
+
+export async function startToolSession(o: { task: Task; system: string; tools: ToolDef[] }): Promise<LabeledToolSession> {
   const { provider, model, key } = await resolveTask(o.task)
-  return toolFactories[provider]({ model, key, system: o.system, tools: o.tools })
+  return { ...toolFactories[provider]({ model, key, system: o.system, tools: o.tools }), provider, model, label: modelLabel(provider, model) }
 }
