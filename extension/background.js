@@ -1,5 +1,5 @@
 // Opens the Job Agent app with the job in the URL fragment (never sent to a server)
-const DEFAULT_APP = 'https://pojithakarunathilake99.github.io/job-agent/'
+const DEFAULT_APP = 'https://pojithakarunathilake99.github.io/role-scout/'
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.type !== 'save-job') return

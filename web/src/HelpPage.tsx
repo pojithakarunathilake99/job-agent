@@ -3,7 +3,7 @@ import GettingStarted from './GettingStarted'
 import { getSetting, listJobs } from './lib/db'
 import { getLLMConfig } from './lib/llm'
 
-const REPO = 'https://github.com/pojithakarunathilake99/job-agent'
+const REPO = 'https://github.com/pojithakarunathilake99/role-scout'
 
 async function diagnostics() {
   const [cfg, routes, countries, jobs, last, agentRun] = await Promise.all([

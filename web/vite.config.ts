@@ -4,7 +4,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/job-agent/',
+  base: '/role-scout/',
   server: {
     allowedHosts: ['.replit.dev'],
   },
