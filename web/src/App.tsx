@@ -417,7 +417,7 @@ function App() {
       setImportSummary(`${result.imported} record${result.imported === 1 ? '' : 's'} imported; ${result.skipped} skipped because their URL already exists.`)
       notify('Backup merged into this workspace.')
     } catch (error) {
-      setImportSummary(error instanceof Error ? error.message : 'That file is not a valid Fieldnote backup.')
+      setImportSummary(error instanceof Error ? error.message : 'That file is not a valid RoleScout backup.')
     } finally { event.target.value = '' }
   }
 
@@ -647,7 +647,7 @@ function App() {
       </div>
     </aside>
     <div className="main-area">
-      <header className="topbar"><span className="crumb">Fieldnote <span style={{ padding: '0 7px', color: 'var(--line)' }}>/</span> {pageTitle[route.page]}</span><div className="top-actions"><span className="source-tag">Saved on this device</span><button className="icon-btn" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} onClick={() => void toggleTheme()}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={16} /></button></div></header>
+      <header className="topbar"><span className="crumb">RoleScout <span style={{ padding: '0 7px', color: 'var(--line)' }}>/</span> {pageTitle[route.page]}</span><div className="top-actions"><span className="source-tag">Saved on this device</span><button className="icon-btn" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} onClick={() => void toggleTheme()}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={16} /></button></div></header>
       <main className="main-content">
         {route.page === 'dashboard' && Dashboard()}
         {route.page === 'job' && Detail()}
