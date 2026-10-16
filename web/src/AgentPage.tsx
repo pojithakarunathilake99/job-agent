@@ -3,6 +3,7 @@ import { getSetting, setSetting } from './lib/db'
 import { runAgent, type AgentLog, type AgentResult } from './lib/agent'
 import { COUNTRIES } from './lib/countries'
 import type { Provider, Routes } from './lib/llm'
+import PreferencesPanel from './PreferencesPanel'
 
 interface ProfileLike { targetTitles: string; skills: string; locations: string; visaSponsorship: boolean; cvText: string }
 
@@ -132,6 +133,9 @@ export default function AgentPage({ profile, notify }: { profile: ProfileLike; n
           {(!hasAI || !keys.adzuna) && <a className="button small primary" style={{ marginLeft: 8 }} href="#/help">How to get keys</a>}
         </section>
       )}
+
+      <PreferencesPanel disabled={running} />
+
 
       <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
         <div className="flex flex-col gap-3 text-sm">

@@ -4,6 +4,7 @@ import { discover, planSearches, type Candidate } from './lib/discover'
 import { scoreCandidates, type AIScore } from './lib/score'
 import { COUNTRIES, countryInfo } from './lib/countries'
 import { WelcomeBanner } from './Welcome'
+import PreferencesPanel from './PreferencesPanel'
 
 type Row = Candidate & { ai?: AIScore }
 interface ProfileLike { targetTitles: string; skills: string; locations: string; visaSponsorship: boolean; cvText: string }
@@ -130,6 +131,9 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
       </div>
 
       {needsSetup && <WelcomeBanner />}
+
+      <PreferencesPanel disabled={busy} />
+
 
       <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
         <div className="flex flex-col gap-3 text-sm">
