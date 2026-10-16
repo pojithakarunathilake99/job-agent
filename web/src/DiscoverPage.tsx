@@ -5,6 +5,8 @@ import { scoreCandidates, type AIScore } from './lib/score'
 import { COUNTRIES, countryInfo } from './lib/countries'
 import { WelcomeBanner } from './Welcome'
 import PreferencesPanel from './PreferencesPanel'
+import NotInterested from './NotInterested'
+import { getDismissed, jobKey } from './lib/memory'
 
 type Row = Candidate & { ai?: AIScore }
 interface ProfileLike { targetTitles: string; skills: string; locations: string; visaSponsorship: boolean; cvText: string }
@@ -33,8 +35,10 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
   const [minScore, setMinScore] = useState(0)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [needsSetup, setNeedsSetup] = useState(false)
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    getDismissed().then(list => setDismissed(new Set(list.map(x => x.key)))).catch(() => {})
     getSetting<{ at: string; rows: Row[] }>('discover:last')
       .then(c => { if (c) { setRows(c.rows); setLastRun(c.at) } })
       .catch(() => {})
@@ -106,13 +110,14 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
   const shown = useMemo(
     () =>
       rows.filter(r => {
+        if (dismissed.has(jobKey(r.title, r.company))) return false
         if (sponsorsOnly && !(cc(r) === 'gb' && (r.sponsor === 'exact' || r.sponsor === 'possible') && !r.ai?.agency)) return false
         if (hideAgencies && isAgencyRow(r)) return false
         if (hideNoVisa && r.ai?.sponsorship === 'not offered') return false
         if ((r.ai?.score ?? r.keywordScore) < minScore) return false
         return true
       }),
-    [rows, sponsorsOnly, hideAgencies, hideNoVisa, minScore],
+    [rows, sponsorsOnly, hideAgencies, hideNoVisa, minScore, dismissed],
   )
 
   const groups = [...new Set(COUNTRIES.map(c => c.group))]
@@ -205,6 +210,7 @@ export default function DiscoverPage({ profile, notify }: { profile: ProfileLike
                 {r.ai?.reason && <p className="mt-2 text-sm">{r.ai.reason}</p>}
               </div>
               <div className="flex gap-2">
+                <NotInterested title={r.title} company={r.company} notify={notify} onDone={k => setDismissed(s => new Set(s).add(k))} />
                 <a className="button small" href={r.url} target="_blank" rel="noreferrer">Open</a>
                 <button className="button small primary" onClick={() => void save(r)} disabled={saved.has(r.key)}>
                   {saved.has(r.key) ? 'Saved' : 'Save'}
