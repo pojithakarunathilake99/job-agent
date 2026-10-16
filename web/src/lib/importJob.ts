@@ -7,9 +7,10 @@ interface Incoming { source?: string; url?: string; title?: string; company?: st
 interface ProfileLike { targetTitles?: string; skills?: string; locations?: string; visaSponsorship?: boolean; cvText?: string }
 
 const SOURCES: JobSource[] = ['linkedin', 'indeed', 'cvlibrary', 'adzuna', 'reed', 'manual']
-const handled = new Set<string>() // guard against double-import (React StrictMode, re-renders)
+const handled = new Set<string>() // guard against double-import
 
-// Import a job sent by the extension via "#/import/<json>": save, sponsor-check, AI-score. Returns the job id.
+// Import a job sent by the extension via "#/import/<json>".
+// Saves immediately and returns the id; sponsor check + AI score continue in the background.
 export async function importFromHash(payload: string): Promise<string | null> {
   if (handled.has(payload)) return null
   handled.add(payload)
@@ -41,6 +42,12 @@ export async function importFromHash(payload: string): Promise<string | null> {
     return job.id
   }
 
+  announce(`Saved: ${job.title} at ${job.company}. Checking sponsor and scoring…`)
+  void enrich(job)
+  return job.id
+}
+
+async function enrich(job: Job) {
   // UK sponsor register (agencies hide the real employer)
   let sponsor: Job['sponsor']
   if (isAgency(job.company)) sponsor = { level: 'agency' }
@@ -59,8 +66,8 @@ export async function importFromHash(payload: string): Promise<string | null> {
   // AI fit score using the full job description
   const profile = await getSetting<ProfileLike>('profile')
   if (!profile?.targetTitles?.trim()) {
-    announce(`Saved: ${job.title} at ${job.company}${sponsorText}. Add your profile to get a fit score.`)
-    return job.id
+    announce(`${job.title}${sponsorText}. Add your profile to get a fit score.`)
+    return
   }
   try {
     const r = await generateJSON<{ score: number; reason: string; sponsorship: 'offered' | 'not offered' | 'not mentioned' }>({
@@ -82,9 +89,8 @@ Return JSON {"score":0-100,"reason":"<max 25 words>","sponsorship":"offered"|"no
     const score = Math.max(0, Math.min(100, Math.round(Number(r.score) || 0)))
     await updateJob(job.id, { match: { score, reason: r.reason ?? '', sponsorship: r.sponsorship ?? 'not mentioned' } })
     const visa = r.sponsorship === 'not offered' ? ' · Ad says no sponsorship' : ''
-    announce(`Saved: ${job.title} at ${job.company}. Fit ${score}${sponsorText}${visa}`)
+    announce(`Scored: ${job.title}. Fit ${score}${sponsorText}${visa}`)
   } catch (e) {
-    announce(`Saved: ${job.title}${sponsorText}. Couldn't score it: ${e instanceof Error ? e.message.slice(0, 120) : 'AI error'}`)
+    announce(`${job.title}${sponsorText}. Couldn't score it: ${e instanceof Error ? e.message.slice(0, 120) : 'AI error'}`)
   }
-  return job.id
 }
