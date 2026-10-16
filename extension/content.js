@@ -73,9 +73,37 @@
     return u.origin + u.pathname
   }
 
+  // LinkedIn: page title is "Job title | Company | LinkedIn"; description sits under "About the job"
+  function linkedinExtract() {
+    const out = { title: '', company: '', location: '', description: '' }
+    const parts = document.title.replace(/^\(\d+\)\s*/, '').split(' | ')
+    if (parts.length >= 3 && /linkedin/i.test(parts[parts.length - 1])) {
+      out.title = parts[0].trim()
+      out.company = parts[1].trim()
+    }
+    const id = new URL(location.href).searchParams.get('currentJobId') || (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1]
+    if (!out.title && id) {
+      const a = [...document.querySelectorAll(`a[href*="/jobs/view/${id}"]`)].find(x => txt(x))
+      if (a) out.title = txt(a).split('\n')[0]
+    }
+    if (!out.company) {
+      const c = [...document.querySelectorAll('a[href*="/company/"]')].map(txt).find(Boolean)
+      if (c) out.company = c.split('\n')[0]
+    }
+    const h = [...document.querySelectorAll('h2, h3')].find(x => /about the job/i.test(txt(x)))
+    let el = h
+    for (let i = 0; el && i < 6 && txt(el).length < 300; i++) el = el.parentElement
+    if (el) out.description = txt(el).replace(/^about the job\s*/i, '').trim()
+    return out
+  }
+
   function extract() {
     const ld = SITE === 'linkedin' ? {} : fromJsonLd() // LinkedIn's JSON-LD can describe a different job in split view
     const dom = fromDom()
+    if (SITE === 'linkedin') {
+      const li = linkedinExtract()
+      for (const k of ['title', 'company', 'location', 'description']) if (li[k]) dom[k] = li[k]
+    }
     const pick = k => (ld[k] || dom[k] || '').toString().trim()
     return {
       source: SITE,
@@ -107,4 +135,11 @@
     chrome.runtime.sendMessage({ type: 'save-job', job })
   })
   document.body.appendChild(btn)
+
+  // LinkedIn is a single-page app: show the button only on Jobs pages, updating as you navigate
+  if (SITE === 'linkedin') {
+    const sync = () => { btn.style.display = location.pathname.startsWith('/jobs') ? '' : 'none' }
+    sync()
+    setInterval(sync, 1000)
+  }
 })()

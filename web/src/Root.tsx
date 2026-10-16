@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import App from './App'
 import Landing from './Landing'
 import { getSetting } from './lib/db'
+import { importFromHash } from './lib/importJob'
 
 export default function Root() {
   const [hash, setHash] = useState(window.location.hash)
@@ -20,6 +21,14 @@ export default function Root() {
   }, [])
 
   const h = hash.replace(/^#\/?/, '')
+
+  // Jobs sent from the Chrome extension arrive as #/import/<json>
+  useEffect(() => {
+    if (!h.startsWith('import/')) return
+    void importFromHash(h.slice('import/'.length)).then(id => {
+      if (id) window.location.hash = `#/job/${encodeURIComponent(id)}`
+    })
+  }, [h])
   if (h === 'home') return <Landing />
   if (h === '') {
     if (setUp === null) return null
