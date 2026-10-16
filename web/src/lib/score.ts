@@ -1,4 +1,5 @@
 import { generateJSON } from './llm'
+import { memorySummary } from './memory'
 import type { Candidate } from './discover'
 
 export interface AIScore {
@@ -24,6 +25,7 @@ Preferred locations: ${profile.locations} (open to relocating)
 Needs visa sponsorship: ${profile.visaSponsorship ? 'yes' : 'no'}
 CV excerpt: ${(profile.cvText ?? '').slice(0, 1500)}`
 
+  const mem = await memorySummary()
   for (let i = 0; i < list.length; i += size) {
     const chunk = list.slice(i, i + size)
     const jobs = chunk
@@ -34,7 +36,7 @@ CV excerpt: ${(profile.cvText ?? '').slice(0, 1500)}`
       system:
         'You assess job fit for a job seeker. Be strict and realistic about seniority and core skill gaps. Judge only from the text given.',
       prompt: `CANDIDATE
-${who}
+${who}${mem ? `\n\n${mem}` : ''}
 
 JOBS (short ad snippets)
 ${jobs}

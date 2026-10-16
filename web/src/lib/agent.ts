@@ -4,6 +4,8 @@ import { searchAdzuna, toCandidate, isAgency, list, type Candidate } from './dis
 import { matchSponsor, normalizeCompany } from './sponsors'
 import { scoreCandidates, type AIScore, type ScoreProfile } from './score'
 import { countryInfo } from './countries'
+import { getDismissed, getPrefs, isExcludedCompany, jobKey, memorySummary } from './memory'
+import { listJobs } from './db'
 
 export interface AgentLog { at: string; kind: 'goal' | 'thought' | 'call' | 'result' | 'error' | 'done'; text: string }
 export interface AgentOptions {
@@ -143,6 +145,8 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
           const c: PoolItem = toCandidate(j, country, skills, titles)
           const k = `${c.country}|${c.title.toLowerCase()}|${normalizeCompany(c.company)}`
           if (seen.has(k)) continue
+          if (skipKeys.has(jobKey(c.title, c.company)) || isExcludedCompany(c.company, prefs)) continue
+          if (prefs.noAgencies && isAgency(c.company)) continue
           seen.add(k)
           if (country === 'gb') {
             if (isAgency(c.company)) c.sponsor = 'agency'
@@ -180,6 +184,7 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
         if (!c.ai) return { error: 'Score this job with score_jobs before saving.' }
         if (c.ai.score < minScore) return { error: `Score ${c.ai.score} is below the minimum ${minScore}.` }
         if (profile.visaSponsorship && c.ai.sponsorship === 'not offered') return { error: 'Ad says no sponsorship and the candidate needs sponsorship.' }
+        if (prefs.noAgencies && (c.sponsor === 'agency' || c.ai.agency)) return { error: 'Candidate wants direct employers only; this looks like an agency.' }
         const reason = String(a.reason ?? '').slice(0, 300)
         const { created } = await addJob({
           source: 'adzuna',
@@ -217,11 +222,17 @@ export async function runAgent(profile: ScoreProfile, opts: AgentOptions): Promi
   }
 
   const allowed = countries.map(c => `${c} (${countryInfo(c)!.name})`).join(', ')
+  const prefs = await getPrefs()
+  const mem = await memorySummary()
+  const skipKeys = new Set<string>([
+    ...(await getDismissed()).map(d => d.key),
+    ...(await listJobs()).map(j => jobKey(j.title, j.company)),
+  ])
   const goal = `CANDIDATE
 Target titles: ${profile.targetTitles}
 Skills: ${profile.skills}
 Preferred locations: ${profile.locations} (open to relocating)
-Needs visa sponsorship: ${profile.visaSponsorship ? 'yes' : 'no'}
+Needs visa sponsorship: ${profile.visaSponsorship ? 'yes' : 'no'}${mem ? `\n\n${mem}` : ''}
 
 GOAL: Find and save up to ${maxSaves} of the best-fitting live jobs with AI score >= ${minScore}.
 Allowed countries: ${allowed}
