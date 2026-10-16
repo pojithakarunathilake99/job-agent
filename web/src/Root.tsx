@@ -25,9 +25,9 @@ export default function Root() {
   // Jobs sent from the Chrome extension arrive as #/import/<json>
   useEffect(() => {
     if (!h.startsWith('import/')) return
-    void importFromHash(h.slice('import/'.length)).then(id => {
-      if (id) window.location.hash = `#/job/${encodeURIComponent(id)}`
-    })
+    const payload = h.slice('import/'.length)
+    window.location.replace('#/dashboard') // open Workspace now; import continues below
+    void importFromHash(payload)
   }, [h])
   if (h === 'home') return <Landing />
   if (h === '') {
